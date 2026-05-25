@@ -12,14 +12,6 @@ group = project.maven_group
 
 repositories {
 	mavenCentral()
-	maven {
-		name = "Wisp Forest"
-		url = "https://maven.wispforest.io"
-	}
-	maven {
-		name = "JitPack"
-		url = "https://jitpack.io"
-	}
 }
 
 loom {
@@ -53,8 +45,6 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	modImplementation "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
 
-	modImplementation "io.wispforest:owo-lib:${project.owo_version}"
-	include "io.wispforest:owo-lib:${project.owo_version}"
 }
 
 shadowJar {
