@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\valen\\\\IdeaProjects\\\\yuriclient\" -Force)",
+      "Bash(Select-Object Name, FullName)",
+      "PowerShell(head *)"
+    ]
+  }
+}
