@@ -16,3 +16,11 @@
 - IGN spoofer 
 - Lobby ID spoofer
 - many more to come!
+
+## To-do
+
+- add capes
+- add full armor customisation (dyes, skull heads)
+- pet skins
+
+
