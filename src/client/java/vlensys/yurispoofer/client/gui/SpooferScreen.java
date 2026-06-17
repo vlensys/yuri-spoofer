@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -55,7 +55,7 @@ public class SpooferScreen extends Screen {
         super(Component.literal("yuri spoofer"));
     }
 
-    /* ── lifecycle ──────────────────────────────────────────────────────────── */
+    // lifecycle
 
     @Override
     protected void init() {
@@ -119,16 +119,16 @@ public class SpooferScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics g, int mx, int my, float partial) {
+    public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float partial) {
         if (scheduledRebuild) {
             scheduledRebuild = false;
             rebuildWidgets();
         }
-        super.render(g, mx, my, partial);
+        super.extractRenderState(g, mx, my, partial);
 
-        // title (fixed)
-        g.drawString(font, "yuri spoofer", cx + 4, 10, 0xFFFFFFFF, false);
-        // header bottom rule
+        // title
+        g.text(font, "yuri spoofer", cx + 4, 10, 0xFFFFFFFF, false);
+        // header rule
         g.fill(cx, HEADER_H - 1, cx + cw, HEADER_H, 0xFF555555);
 
         // section rules
@@ -140,7 +140,7 @@ public class SpooferScreen extends Screen {
         for (Object[] l : lbls) {
             int ly = (int) l[1];
             if (ly >= HEADER_H - font.lineHeight && ly < this.height)
-                g.drawString(font, (String) l[2], (int) l[0], ly, (int) l[3], false);
+                g.text(font, (String) l[2], (int) l[0], ly, (int) l[3], false);
         }
     }
 
@@ -159,7 +159,7 @@ public class SpooferScreen extends Screen {
         super.onClose();
     }
 
-    /* ── config sync ────────────────────────────────────────────────────────── */
+    // config sync
 
     private void syncConfig() {
         if (nameBox       != null) CONFIG.setFakeName(nameBox.getValue());
@@ -183,7 +183,7 @@ public class SpooferScreen extends Screen {
         }
     }
 
-    /* ── section / row builders ─────────────────────────────────────────────── */
+    // row builders
 
     private int section(int logY, String title) {
         int sy = logY - scroll;
@@ -299,7 +299,7 @@ public class SpooferScreen extends Screen {
         return logY + ((all.size() + 1) / 2) * ROW_H;
     }
 
-    /* ── widget / render helpers ────────────────────────────────────────────── */
+    // render helpers
 
     private EditBox newBox(int x, int y, int w, int h, String name, int maxLen, String value, String hint) {
         EditBox box = new EditBox(font, x, y, w, h, Component.literal(name));
@@ -319,7 +319,7 @@ public class SpooferScreen extends Screen {
         lbls.add(new Object[]{x, y, text, color});
     }
 
-    /* ── util ───────────────────────────────────────────────────────────────── */
+    // util
 
     private static String entryName(Object e) {
         if (e instanceof Skills.Skill)   return ((Skills.Skill)   e).getName();

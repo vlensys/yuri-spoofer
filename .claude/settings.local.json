@@ -3,7 +3,11 @@
     "allow": [
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\valen\\\\IdeaProjects\\\\yuriclient\" -Force)",
       "Bash(Select-Object Name, FullName)",
-      "PowerShell(head *)"
+      "PowerShell(head *)",
+      "Bash(find ~/.gradle/caches -iname \"*CustomHeadLayer*\" 2>/dev/null | head; echo \"---sources jars---\"; find ~/.gradle/caches -ipath \"*loom*\" -iname \"*sources*.jar\" 2>/dev/null | head; echo \"---minecraft merged---\"; find ~/.gradle/caches/fabric-loom -iname \"*.jar\" 2>/dev/null | head -50)",
+      "Read(//c/Users/valen/.gradle/caches/**)",
+      "Read(//c/Users/valen/.gradle/caches/fabric-loom/**)",
+      "Bash(rtk find *)"
     ]
   }
 }

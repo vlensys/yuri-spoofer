@@ -30,6 +30,25 @@ object SpoofConfig {
     var spoofCurrency: Boolean = false
     var currencyValues: MutableMap<String, String> = mutableMapOf()
 
+    // cape
+    var spoofCape: Boolean = false
+    var capeId: String = "migrator"            // cape id
+    var customCapes: MutableList<CustomCape> = mutableListOf()  // custom capes
+
+    // cape directory
+    fun capesDir(): java.nio.file.Path = FabricLoader.getInstance().configDir.resolve("yuri-spoofer/capes")
+
+    // armor
+    var spoofArmor: Boolean = false
+    var armorPieces: MutableMap<String, ArmorPiece> = mutableMapOf()
+
+    fun armorPiece(slot: String): ArmorPiece = armorPieces.getOrPut(slot) { ArmorPiece() }
+
+    // skull
+    var spoofSkull: Boolean = false
+    var skullId: String = ""               // skull id
+    var skullCustomTexture: String = ""    // skull texture
+
     fun skillLevel(skill: Skills.Skill): Int? {
         val raw = skillLevels[skill.name] ?: return null
         return raw.coerceIn(1, skill.cap)
@@ -77,6 +96,14 @@ object SpoofConfig {
         var slayerLevels: MutableMap<String, Int> = mutableMapOf(),
         var spoofCurrency: Boolean = false,
         var currencyValues: MutableMap<String, String> = mutableMapOf(),
+        var spoofCape: Boolean = false,
+        var capeId: String = "migrator",
+        var customCapes: MutableList<CustomCape> = mutableListOf(),
+        var spoofArmor: Boolean = false,
+        var armorPieces: MutableMap<String, ArmorPiece> = mutableMapOf(),
+        var spoofSkull: Boolean = false,
+        var skullId: String = "",
+        var skullCustomTexture: String = "",
     )
 
     fun load() {
@@ -99,6 +126,14 @@ object SpoofConfig {
                 slayerLevels = d.slayerLevels
                 spoofCurrency = d.spoofCurrency
                 currencyValues = d.currencyValues
+                spoofCape = d.spoofCape
+                capeId = d.capeId
+                customCapes = d.customCapes
+                spoofArmor = d.spoofArmor
+                armorPieces = d.armorPieces
+                spoofSkull = d.spoofSkull
+                skullId = d.skullId
+                skullCustomTexture = d.skullCustomTexture
             }
         } catch (_: Exception) {
         }
@@ -110,9 +145,19 @@ object SpoofConfig {
                 masterEnabled, spoofName, fakeName, spoofRank, rankPreset, rankText,
                 spoofLevel, levelText, spoofLobby, lobbyText, spoofSkills, skillLevels,
                 spoofSlayers, slayerLevels, spoofCurrency, currencyValues,
+                spoofCape, capeId, customCapes,
+                spoofArmor, armorPieces,
+                spoofSkull, skullId, skullCustomTexture,
             )
             Files.writeString(path, gson.toJson(d))
         } catch (_: Exception) {
         }
     }
 }
+
+// custom cape
+data class CustomCape(
+    var id: String = "",     // id
+    var name: String = "",   // name
+    var path: String = "",   // path
+)

@@ -14,7 +14,7 @@ class SpooferGuiGameTest : FabricClientGameTest {
     override fun runTest(context: ClientGameTestContext) {
         context.waitForScreen(TitleScreen::class.java)
 
-        // Engine check: spoof a realistic "[level] [rank] Name" component for the local account.
+        // engine check
         context.runOnClient<RuntimeException> { mc ->
             val real = mc.user.name
             SpoofConfig.masterEnabled = true
@@ -33,19 +33,19 @@ class SpooferGuiGameTest : FabricClientGameTest {
             if (!result.contains("OWNER")) throw AssertionError("rank not spoofed: '$result'")
             if (!result.contains("HACKERMAN")) throw AssertionError("fake name missing: '$result'")
 
-            // Rank preset inserted on an unranked (gray) name.
+            // rank insert
             SpoofConfig.spoofName = false
             SpoofConfig.spoofLevel = false
             SpoofConfig.rankPreset = "MVP+"
             val inserted = Spoofer.spoof(Component.literal("§7$real")).string
             if (!inserted.contains("[MVP+]")) throw AssertionError("rank not inserted: '$inserted'")
 
-            // Rank "None" removes an existing rank.
+            // rank remove
             SpoofConfig.rankPreset = "None"
             val removed = Spoofer.spoof(Component.literal("§b[MVP+] §f$real")).string
             if (removed.contains("[")) throw AssertionError("rank not removed: '$removed'")
 
-            // Lobby id (split across color codes) on the scoreboard date line - no username present.
+            // lobby id
             SpoofConfig.spoofRank = false
             SpoofConfig.spoofLobby = true
             SpoofConfig.lobbyText = "&8YURITEST"
@@ -54,26 +54,26 @@ class SpooferGuiGameTest : FabricClientGameTest {
             if (lobby.contains("mB3") || lobby.contains("DA")) throw AssertionError("lobby id leftover: '$lobby'")
             if (!lobby.contains("05/23/26")) throw AssertionError("date lost: '$lobby'")
 
-            // "Sending you to server <id>..." join message.
+            // join message
             val sending = Spoofer.spoof(Component.literal("Sending you to server mega77G...")).string
             if (sending.contains("mega77G")) throw AssertionError("server id not spoofed: '$sending'")
             if (!sending.contains("Sending you to")) throw AssertionError("join text lost: '$sending'")
 
-            // Tab list: regular ranks (VIP/MVP family) colour the name but don't show the bracket.
+            // tab rank
             SpoofConfig.spoofLobby = false
             SpoofConfig.spoofRank = true
             SpoofConfig.rankPreset = "MVP+"
             val tab = Spoofer.spoof(Component.literal("§7[§e50§7] §7$real"), false).string
             if (tab.contains("[MVP+]")) throw AssertionError("rank bracket leaked into tab: '$tab'")
 
-            // Skill XP math + roman numeral round-trip.
+            // skill math
             val mining = Skills.byName("Mining") ?: throw AssertionError("Mining skill missing")
             if (mining.cap != 60) throw AssertionError("Mining cap wrong: ${mining.cap}")
             if (mining.stepFrom(19) != 200000L) throw AssertionError("19->20 step wrong: ${mining.stepFrom(19)}")
             if (Skills.toRoman(25) != "XXV") throw AssertionError("toRoman(25) wrong: ${Skills.toRoman(25)}")
             if (Skills.parseRoman("XIX") != 19) throw AssertionError("parseRoman(XIX) wrong")
 
-            // Skill tooltip rewrite: spoof Mining to level 25 from a screenshot-shaped tooltip.
+            // skill tooltip
             SpoofConfig.spoofRank = false
             SpoofConfig.spoofName = false
             SpoofConfig.spoofLevel = false
@@ -89,28 +89,28 @@ class SpooferGuiGameTest : FabricClientGameTest {
             SkillSpoofer.rewriteTooltip(lines)
             if (lines[0].string != "Mining XXV") throw AssertionError("name not releveled: '${lines[0].string}'")
             if (!lines[1].string.contains("Progress to Level XXVI")) throw AssertionError("progress level wrong: '${lines[1].string}'")
-            // 25->26 needs 800k; 76.9% of 800,000 = 615,200.
+            // xp rescale
             if (!lines[2].string.contains("615,200/800k")) throw AssertionError("xp not rescaled: '${lines[2].string}'")
             if (!lines[3].string.contains("Level XXVI Rewards")) throw AssertionError("rewards level wrong: '${lines[3].string}'")
             if (lines[4].string != "Spelunker XXVI") throw AssertionError("perk not releveled: '${lines[4].string}'")
 
-            // Tab skill line: level number swapped, progress untouched.
+            // tab skill
             val tab2 = SkillSpoofer.spoofText("§7Mining 19§7: §a76.9%")
             if (!tab2.contains("Mining 25")) throw AssertionError("tab skill not releveled: '$tab2'")
             SpoofConfig.spoofSkills = false
             SpoofConfig.skillLevels = mutableMapOf()
 
-            // Slayer tooltip rewrite: spoof Zombie slayer to level 5 from screenshot-shaped tooltips.
+            // slayer tooltip
             SpoofConfig.spoofSlayers = true
             SpoofConfig.slayerLevels = mutableMapOf("Zombie" to 5)
-            // Boss item.
+            // boss item
             val bossLines = mutableListOf<Component>(
                 Component.literal("§c☠ Revenant Horror"),
                 Component.literal("§7Zombie Slayer: §eLVL 1"),
             )
             SlayerSpoofer.rewriteTooltip(bossLines)
             if (!bossLines[1].string.contains("LVL 5")) throw AssertionError("boss level wrong: '${bossLines[1].string}'")
-            // Rewards item: 5/15 at level 1 = 33%; level 5->6 needs total 20000, so ~6,667/20k.
+            // rewards item
             val rewardLines = mutableListOf<Component>(
                 Component.literal("§dBoss Leveling Rewards"),
                 Component.literal("§7Current LVL: §e1"),

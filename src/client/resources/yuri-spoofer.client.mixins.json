@@ -7,7 +7,9 @@
 		"PlayerTabOverlayMixin",
 		"GuiGraphicsMixin",
 		"PlayerTeamMixin",
-		"EntityRendererMixin"
+		"EntityRendererMixin",
+		"AvatarRendererMixin",
+		"CustomHeadLayerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

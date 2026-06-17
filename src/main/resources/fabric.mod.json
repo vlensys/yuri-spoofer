@@ -1,51 +1,49 @@
 {
-	"schemaVersion": 1,
-	"id": "yuri-spoofer",
-	"version": "1.0",
-	"name": "yuri spoofer",
-	"description": "hypixel skyblock spoofing mod!",
-	"authors": [
-		"vlensys"
-	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
-	"license": "MIT",
-	"icon": "assets/yuri-spoofer/icon.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			{
-				"value": "vlensys.yurispoofer.YuriSpoofer",
-				"adapter": "kotlin"
-			}
-		],
-		"client": [
-			{
-				"value": "vlensys.yurispoofer.client.YuriSpooferClient",
-				"adapter": "kotlin"
-			}
-		],
-		"fabric-client-gametest": [
-			{
-				"value": "vlensys.yurispoofer.client.test.SpooferGuiGameTest",
-				"adapter": "kotlin"
-			}
-		]
-	},
-	"mixins": [
-		"yuri-spoofer.mixins.json",
-		{
-			"config": "yuri-spoofer.client.mixins.json",
-			"environment": "client"
-		}
-	],
-	"depends": {
-		"fabricloader": ">=0.19.2",
-		"minecraft": "~1.21.11",
-		"java": ">=21",
-		"fabric-api": "*",
-		"fabric-language-kotlin": "*"
-	}
+  "schemaVersion": 1,
+  "id": "yuri-spoofer",
+  "version": "1.2.0",
+  "name": "yuri spoofer",
+  "description": "hypixel skyblock spoofing mod!",
+  "authors": ["vlensys"],
+  "contact": {
+    "homepage": "https://fabricmc.net/",
+    "sources": "https://github.com/FabricMC/fabric-example-mod"
+  },
+  "license": "GPL v3",
+  "icon": "assets/yuri-spoofer/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      {
+        "value": "vlensys.yurispoofer.YuriSpoofer",
+        "adapter": "kotlin"
+      }
+    ],
+    "client": [
+      {
+        "value": "vlensys.yurispoofer.client.YuriSpooferClient",
+        "adapter": "kotlin"
+      }
+    ],
+    "fabric-client-gametest": [
+      {
+        "value": "vlensys.yurispoofer.client.test.SpooferGuiGameTest",
+        "adapter": "kotlin"
+      }
+    ]
+  },
+  "mixins": [
+    "yuri-spoofer.mixins.json",
+    {
+      "config": "yuri-spoofer.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": ">=26.1.2",
+    "java": ">=21",
+    "fabric-api": "*",
+    "fabric-language-kotlin": "*"
+  }
 }
