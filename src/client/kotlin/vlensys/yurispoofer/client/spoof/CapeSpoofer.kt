@@ -15,6 +15,9 @@ import java.util.UUID
 
 // cape spoofer
 object CapeSpoofer {
+    const val CAPE_WIDTH = 64
+    const val CAPE_HEIGHT = 32
+
     private val presetTex = HashMap<String, ClientAsset.ResourceTexture>()  // preset textures
     private val customTex = HashMap<String, ClientAsset.ResourceTexture>()  // custom textures
     private val attempted = HashSet<String>()
@@ -90,6 +93,44 @@ object CapeSpoofer {
             val id = Capes.CUSTOM_PREFIX + uid
             val dest = dir.resolve("$uid.png")
             Files.copy(src, dest, StandardCopyOption.REPLACE_EXISTING)
+            val name = src.fileName.toString().substringBeforeLast('.').take(16).ifBlank { "Custom" }
+            SpoofConfig.customCapes.add(CustomCape(id, name, dest.toString()))
+            SpoofConfig.save()
+            loadCustom(id)
+            id
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun importCapeEdited(srcPath: String, x: Int, y: Int, width: Int, height: Int): String? {
+        if (width <= 0 || height <= 0) return null
+        return try {
+            val src = Path.of(srcPath)
+            val input = Files.newInputStream(src).use { NativeImage.read(it) }
+            val out = NativeImage(CAPE_WIDTH, CAPE_HEIGHT, true)
+            for (ty in 0 until CAPE_HEIGHT) {
+                for (tx in 0 until CAPE_WIDTH) {
+                    out.setPixel(tx, ty, 0)
+                }
+            }
+            for (ty in 0 until CAPE_HEIGHT) {
+                val sy = ((ty - y).toLong() * input.height / height).toInt()
+                if (sy !in 0 until input.height) continue
+                for (tx in 0 until CAPE_WIDTH) {
+                    val sx = ((tx - x).toLong() * input.width / width).toInt()
+                    if (sx !in 0 until input.width) continue
+                    out.setPixel(tx, ty, input.getPixel(sx, sy))
+                }
+            }
+            val dir = SpoofConfig.capesDir()
+            Files.createDirectories(dir)
+            val uid = UUID.randomUUID().toString().substring(0, 8)
+            val id = Capes.CUSTOM_PREFIX + uid
+            val dest = dir.resolve("$uid.png")
+            out.writeToFile(dest)
+            input.close()
+            out.close()
             val name = src.fileName.toString().substringBeforeLast('.').take(16).ifBlank { "Custom" }
             SpoofConfig.customCapes.add(CustomCape(id, name, dest.toString()))
             SpoofConfig.save()

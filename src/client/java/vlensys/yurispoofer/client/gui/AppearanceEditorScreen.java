@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -208,14 +209,19 @@ public class AppearanceEditorScreen extends Screen {
         int i = Math.max(0, opts.indexOf(cur));
         i = (i + dir + opts.size()) % opts.size();
         String chosen = opts.get(i);
+        if (chosen.isEmpty()) {
+            p.setTrimPattern("");
+            p.setTrimMaterial("");
+            return;
+        }
         if (pattern) {
             p.setTrimPattern(chosen);
-            if (!chosen.isEmpty() && p.getTrimMaterial().isEmpty()) p.setTrimMaterial(DEFAULT_MAT);
+            if (p.getTrimMaterial().isEmpty()) p.setTrimMaterial(DEFAULT_MAT);
         } else {
             p.setTrimMaterial(chosen);
-            if (!chosen.isEmpty() && p.getTrimPattern().isEmpty()) p.setTrimPattern(DEFAULT_PAT);
+            if (p.getTrimPattern().isEmpty()) p.setTrimPattern(DEFAULT_PAT);
         }
-        if (!chosen.isEmpty()) p.setOn(true);
+        p.setOn(true);
     }
 
     // cape
@@ -352,10 +358,8 @@ public class AppearanceEditorScreen extends Screen {
 
         ArmorPiece p = CONFIG.armorPiece(selSlot);
         String pat = p.getTrimPattern(), mat = p.getTrimMaterial();
-        String matForPat = mat.isEmpty() ? DEFAULT_MAT : mat;
-        String patForMat = pat.isEmpty() ? DEFAULT_PAT : pat;
-        ItemStack patIcon = ArmorSpoofer.previewStack(selSlot, p.getColor(), pat, pat.isEmpty() ? "" : matForPat);
-        ItemStack matIcon = ArmorSpoofer.previewStack(selSlot, p.getColor(), mat.isEmpty() ? "" : patForMat, mat);
+        ItemStack patIcon = ArmorSpoofer.previewStack(selSlot, p.getColor(), pat, mat);
+        ItemStack matIcon = ArmorSpoofer.previewStack(selSlot, p.getColor(), pat, mat);
         cyclerIcon(g, px + 12, trimY, "Trim Pattern", Trims.INSTANCE.display(pat), patIcon);
         cyclerIcon(g, px + 12, trimY + 26, "Trim Material", Trims.INSTANCE.display(mat), matIcon);
         if (headLocked) g.text(font, "Helmet is locked while a skull is active.", px + 12, trimY + 54, TEXT_FAINT, false);
@@ -400,7 +404,7 @@ public class AppearanceEditorScreen extends Screen {
         g.disableScissor();
         scrollbar(g, capeView, capeScroll, capeMaxScroll);
 
-        g.text(font, "click + to import a cape PNG  ·  × removes", px + 12, dy1 - 11, TEXT_FAINT, false);
+        g.text(font, "click + to import/edit a cape png  ·  × removes", px + 12, dy1 - 11, TEXT_FAINT, false);
     }
 
     private void renderSkull(GuiGraphicsExtractor g) {
@@ -539,9 +543,7 @@ public class AppearanceEditorScreen extends Screen {
             if (path != null) {
                 String p = path;
                 minecraft.execute(() -> {
-                    String id = CapeSpoofer.INSTANCE.importCape(p);
-                    if (id != null) { CONFIG.setCapeId(id); CONFIG.setSpoofCape(true); }
-                    if (minecraft.screen == this) rebuildWidgets();
+                    minecraft.setScreen(new CapeImageEditorScreen(p));
                 });
             }
         }, "yuri-cape-picker").start();
