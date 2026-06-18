@@ -29,7 +29,7 @@ object CapeSpoofer {
     private val attempted = HashSet<String>()
 
     fun enabled(): Boolean =
-        SpoofConfig.spoofCape && SpoofConfig.capeId != Capes.NONE && SpoofConfig.capeId != Capes.ADD
+        SpoofConfig.masterEnabled && SpoofConfig.spoofCape && SpoofConfig.capeId != Capes.NONE && SpoofConfig.capeId != Capes.ADD
 
     private fun currentCape(): ClientAsset.ResourceTexture? {
         val id = SpoofConfig.capeId

@@ -7,6 +7,7 @@ import java.nio.file.Files
 
 object SpoofConfig {
     var masterEnabled: Boolean = false
+    var bgImage: Boolean = false
 
     var spoofName: Boolean = false
     var fakeName: String = ""
@@ -81,6 +82,7 @@ object SpoofConfig {
 
     private data class Data(
         var masterEnabled: Boolean = false,
+        var bgImage: Boolean = false,
         var spoofName: Boolean = false,
         var fakeName: String = "",
         var spoofRank: Boolean = false,
@@ -111,6 +113,7 @@ object SpoofConfig {
             if (Files.exists(path)) {
                 val d = gson.fromJson(Files.readString(path), Data::class.java) ?: return
                 masterEnabled = d.masterEnabled
+                bgImage = d.bgImage
                 spoofName = d.spoofName
                 fakeName = d.fakeName
                 spoofRank = d.spoofRank
@@ -142,7 +145,7 @@ object SpoofConfig {
     fun save() {
         try {
             val d = Data(
-                masterEnabled, spoofName, fakeName, spoofRank, rankPreset, rankText,
+                masterEnabled, bgImage, spoofName, fakeName, spoofRank, rankPreset, rankText,
                 spoofLevel, levelText, spoofLobby, lobbyText, spoofSkills, skillLevels,
                 spoofSlayers, slayerLevels, spoofCurrency, currencyValues,
                 spoofCape, capeId, customCapes,

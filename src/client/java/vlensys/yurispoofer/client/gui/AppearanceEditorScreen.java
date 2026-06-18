@@ -1,13 +1,11 @@
 package vlensys.yurispoofer.client.gui;
 
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -55,11 +53,11 @@ public class AppearanceEditorScreen extends Screen {
     // flat dark palette, white/neutral accent
     private static final int BG_TOP     = 0xF00B0B11;
     private static final int BG_BOT     = 0xF8050508;
-    private static final int SURFACE    = 0xFF15151B;
-    private static final int SURFACE_HI = 0xFF20202A;
-    private static final int INSET      = 0xFF0A0A0E;
-    private static final int LINE       = 0xFF2A2A33;
-    private static final int SEL_BG     = 0xFF23232E;
+    private static final int SURFACE    = 0xC015151B;
+    private static final int SURFACE_HI = 0xC820202A;
+    private static final int INSET      = 0xB00A0A0E;
+    private static final int LINE       = 0xCC2A2A33;
+    private static final int SEL_BG     = 0xCC23232E;
     private static final int ACCENT     = 0xFFFFFFFF;
     private static final int TOG_ON     = 0xFFE9E9EE;
     private static final int TOG_OFF    = 0xFF34343C;
@@ -69,6 +67,12 @@ public class AppearanceEditorScreen extends Screen {
     private static final int TEXT_MUTE  = 0xFF9A9AA2;
     private static final int TEXT_FAINT = 0xFF5E5E68;
     private static final int ON_DOT     = 0xFF4CA32C;
+
+    // master enable button (bottom-left): green = on, red = off
+    private static final int BTN_ON     = 0xFF2F9E44;
+    private static final int BTN_ON_HI  = 0xFF37B24D;
+    private static final int BTN_OFF    = 0xFFB23A3A;
+    private static final int BTN_OFF_HI = 0xFFC94B4B;
 
     // §/& legacy color codes 0-f
     private static final int[] LEGACY = {
@@ -87,10 +91,11 @@ public class AppearanceEditorScreen extends Screen {
     private static final int ROW_H = 20, SECTION_H = 15, RT = 18;
     private static final int PILL_W = 22, PILL_H = 12;
 
-    // yuri badge (bottom-left)
-    private static final Identifier YURI_TEX = Identifier.fromNamespaceAndPath("yuri-spoofer", "textures/gui/yuri.png");
-    private static boolean yuriTried = false, yuriOk = false;
-    private static int yuriW = 0, yuriH = 0;
+    // yuri button (bottom-left): toggles the image background
+    private static final int YURI_BTN_W = 64, YURI_BTN_H = 18;
+    private static final Identifier BG_TEX =
+        Identifier.fromNamespaceAndPath("yuri-spoofer", "textures/gui/background.png");
+    private int[] yuriBtn;
 
     private int tab = TAB_PROFILE;
     private float mx, my;
@@ -124,6 +129,12 @@ public class AppearanceEditorScreen extends Screen {
     private float colH, colS, colV = 1f;
     private int[] wheel, valBar;
     private int trimY;
+    private EditBox hexBox;
+
+    // trim pattern gallery (visual selector, like the cape grid)
+    private final List<String> trimPatternIds = new ArrayList<>();
+    private int[] trimView;
+    private int trimScroll = 0, trimCols = 3, trimTileW = 0, trimTileH = 40, trimMaxScroll = 0;
 
     // cape gallery
     private final List<String> capeIds = new ArrayList<>();
@@ -149,10 +160,9 @@ public class AppearanceEditorScreen extends Screen {
         syncAll();
         nameBox = null; levelBox = null; lobbyBox = null; rankCustomBox = null;
         skillBoxes.clear(); slayerBoxes.clear(); currencyBoxes.clear();
-        capeNameBox = null; skullSearchBox = null; skullCustomBox = null;
+        capeNameBox = null; skullSearchBox = null; skullCustomBox = null; hexBox = null;
         hot.clear(); hotAct.clear(); leftDraws.clear();
-        wheel = null; valBar = null; skullView = null; capeView = null;
-        yuriTried = false; // re-check the badge asset on every open
+        wheel = null; valBar = null; skullView = null; capeView = null; trimView = null;
 
         int margin = 14;
         px = margin;
@@ -160,7 +170,7 @@ public class AppearanceEditorScreen extends Screen {
         pw = (int) (usableW * 0.50) - 6;
         tabY = 30;
         contentY = tabY + 18;
-        panelBottom = height - margin - 62; // reserve bottom-left for the yuri badge
+        panelBottom = height - margin - 30; // reserve bottom-left for the yuri button
         if (panelBottom < contentY + 60) panelBottom = Math.min(height - margin, contentY + 60);
         leftViewportH = panelBottom - contentY;
 
@@ -185,6 +195,11 @@ public class AppearanceEditorScreen extends Screen {
         masterRect = new int[]{ mx0, 11, PILL_W, PILL_H };
         addHot(mx0, 10, PILL_W, 14, () -> { CONFIG.setMasterEnabled(!CONFIG.getMasterEnabled()); rebuildWidgets(); });
 
+        // yuri button (bottom-left): toggles the image background (green = on, red = off)
+        yuriBtn = new int[]{ margin, height - margin - YURI_BTN_H, YURI_BTN_W, YURI_BTN_H };
+        addHot(yuriBtn[0], yuriBtn[1], yuriBtn[2], yuriBtn[3],
+            () -> { CONFIG.setBgImage(!CONFIG.getBgImage()); CONFIG.save(); });
+
         switch (tab) {
             case TAB_PROFILE -> initProfile();
             case TAB_STATS   -> initStats();
@@ -198,6 +213,7 @@ public class AppearanceEditorScreen extends Screen {
     @Override
     public void rebuildWidgets() {
         syncAll();
+        CONFIG.save();
         super.rebuildWidgets();
     }
 
@@ -348,8 +364,8 @@ public class AppearanceEditorScreen extends Screen {
 
     private int statRow(int ly, String name, int boxW, String value, String hint, int maxLen, Map<String, EditBox> map) {
         final int ay = contentY + ly - leftScroll;
-        leftDraws.add(g -> g.text(font, name, px + 18, ay + 5, TEXT, false));
-        map.put(name, boxCulled(px + pw - boxW, ay + 1, boxW, hint, value, maxLen, ay));
+        leftDraws.add(g -> g.text(font, name, px + 18, ay + 6, TEXT, false));
+        map.put(name, boxCulled(px + 120, ay + 3, boxW, 14, hint, value, maxLen, ay));
         return ly + ROW_H;
     }
 
@@ -386,7 +402,11 @@ public class AppearanceEditorScreen extends Screen {
     private boolean rowVisible(int ay, int h) { return ay + h > contentY && ay < panelBottom; }
 
     private EditBox boxCulled(int x, int y, int w, String hint, String value, int maxLen, int rowY) {
-        EditBox box = new EditBox(font, x, y, w, 18, Component.literal(hint));
+        return boxCulled(x, y, w, 18, hint, value, maxLen, rowY);
+    }
+
+    private EditBox boxCulled(int x, int y, int w, int h, String hint, String value, int maxLen, int rowY) {
+        EditBox box = new TransEditBox(font, x, y, w, h, Component.literal(hint));
         box.setMaxLength(maxLen);
         box.setValue(value);
         box.setHint(Component.literal(hint));
@@ -423,40 +443,70 @@ public class AppearanceEditorScreen extends Screen {
         y += 26;
 
         ColorWheel.ensureBuilt();
-        int avail = panelBottom - y - 58;
-        int size = Math.min(ColorWheel.SIZE, Math.min(pw - 70, Math.max(40, avail)));
+        int avail = panelBottom - y - 110;
+        int size = Math.min(ColorWheel.SIZE, Math.min(Math.min(pw - 70, 96), Math.max(40, avail)));
         wheel = new int[]{ px, y, size };
         valBar = new int[]{ px + size + 14, y, 14, size };
+
+        int sw = valBar[0] + valBar[2] + 12;
+        hexBox = makeBox(sw, y + 28, 56, "#RRGGBB",
+            String.format("#%06X", CONFIG.armorPiece(selSlot).getColor() & 0xFFFFFF), 7);
+        hexBox.setResponder(this::applyHex);
+
         y += size + 12;
 
+        // trim material
         trimY = y;
-        addHot(px, y, 18, 20, () -> cycleTrim(true, -1));
-        addHot(px + pw - 18, y, 18, 20, () -> cycleTrim(true, 1));
-        addHot(px, y + 24, 18, 20, () -> cycleTrim(false, -1));
-        addHot(px + pw - 18, y + 24, 18, 20, () -> cycleTrim(false, 1));
+        addHot(px, y, 18, 20, () -> cycleTrim(false, -1));
+        addHot(px + pw - 18, y, 18, 20, () -> cycleTrim(false, 1));
+        y += 24 + 12; // material row + "Trim Pattern" label
+
+        trimPatternIds.clear();
+        trimPatternIds.add(Trims.NONE);
+        trimPatternIds.addAll(Trims.INSTANCE.getPATTERN_IDS());
+        trimCols = 3;
+        trimTileW = (pw - 8 * (trimCols - 1)) / trimCols;
+        trimTileH = 40;
+        trimView = new int[]{ px, y, pw, Math.max(0, panelBottom - y) };
+        int prows = (trimPatternIds.size() + trimCols - 1) / trimCols;
+        trimMaxScroll = Math.max(0, prows * (trimTileH + 8) - trimView[3]);
+        trimScroll = Math.min(trimScroll, trimMaxScroll);
+    }
+
+    private void applyHex(String s) {
+        String t = s.trim();
+        if (t.startsWith("#")) t = t.substring(1);
+        if (t.length() != 6) return;
+        int rgb;
+        try { rgb = Integer.parseInt(t, 16); } catch (NumberFormatException e) { return; }
+        rgb &= 0xFFFFFF;
+        if (selSlot.equals("HEAD") && CONFIG.getSpoofSkull()) return;
+        loadHsvFrom(rgb);
+        ArmorPiece p = CONFIG.armorPiece(selSlot);
+        p.setColor(rgb);
+        p.setOn(true);
     }
 
     private void cycleTrim(boolean pattern, int dir) {
         if (selSlot.equals("HEAD") && CONFIG.getSpoofSkull()) return;
         ArmorPiece p = CONFIG.armorPiece(selSlot);
-        List<String> opts = new ArrayList<>();
-        opts.add(Trims.NONE);
-        opts.addAll(pattern ? Trims.INSTANCE.getPATTERN_IDS() : Trims.INSTANCE.getMATERIAL_IDS());
-        String cur = pattern ? p.getTrimPattern() : p.getTrimMaterial();
-        int i = Math.max(0, opts.indexOf(cur));
-        i = (i + dir + opts.size()) % opts.size();
-        String chosen = opts.get(i);
-        if (chosen.isEmpty()) {
-            p.setTrimPattern("");
-            p.setTrimMaterial("");
-            return;
-        }
         if (pattern) {
+            // pattern can be None; leaving it None does not touch the material
+            List<String> opts = new ArrayList<>();
+            opts.add(Trims.NONE);
+            opts.addAll(Trims.INSTANCE.getPATTERN_IDS());
+            int i = Math.max(0, opts.indexOf(p.getTrimPattern()));
+            i = (i + dir + opts.size()) % opts.size();
+            String chosen = opts.get(i);
             p.setTrimPattern(chosen);
-            if (p.getTrimMaterial().isEmpty()) p.setTrimMaterial(DEFAULT_MAT);
+            if (!chosen.isEmpty() && p.getTrimMaterial().isEmpty()) p.setTrimMaterial(DEFAULT_MAT);
         } else {
-            p.setTrimMaterial(chosen);
-            if (p.getTrimPattern().isEmpty()) p.setTrimPattern(DEFAULT_PAT);
+            // material is never None
+            List<String> opts = new ArrayList<>(Trims.INSTANCE.getMATERIAL_IDS());
+            String cur = p.getTrimMaterial().isEmpty() ? DEFAULT_MAT : p.getTrimMaterial();
+            int i = Math.max(0, opts.indexOf(cur));
+            i = (i + dir + opts.size()) % opts.size();
+            p.setTrimMaterial(opts.get(i));
         }
         p.setOn(true);
     }
@@ -501,14 +551,66 @@ public class AppearanceEditorScreen extends Screen {
         int sw = bx + bw + 12;
         insetBox(g, sw - 1, by - 1, 34, 26);
         g.fill(sw, by, sw + 32, by + 24, Colors.hsvToArgb(colH, colS, colV));
-        g.text(font, String.format("#%06X", Colors.hsvToRgb(colH, colS, colV) & 0xFFFFFF), sw, by + 30, TEXT_MUTE, false);
+        // hex EditBox sits at (sw, by + 28); keep it in sync with the wheel
+        if (hexBox != null) {
+            String hx = String.format("#%06X", Colors.hsvToRgb(colH, colS, colV) & 0xFFFFFF);
+            if (!hexBox.isFocused() && !hexBox.getValue().equalsIgnoreCase(hx)) hexBox.setValue(hx);
+        }
+
+        if (headLocked) {
+            g.text(font, "Helmet locked while a skull is active.", px, trimY + 6, TEXT_FAINT, false);
+            return;
+        }
 
         ArmorPiece p = CONFIG.armorPiece(selSlot);
-        String pat = p.getTrimPattern(), mat = p.getTrimMaterial();
-        // each cycler now shows the icon that actually matches its own selection
-        cyclerIcon(g, px, trimY, "Trim Pattern", Trims.INSTANCE.display(pat), Trims.INSTANCE.patternIcon(pat));
-        cyclerIcon(g, px, trimY + 24, "Trim Material", Trims.INSTANCE.display(mat), Trims.INSTANCE.materialIcon(mat));
-        if (headLocked) g.text(font, "Helmet locked while a skull is active.", px, trimY + 50, TEXT_FAINT, false);
+        String matShown = p.getTrimMaterial().isEmpty() ? DEFAULT_MAT : p.getTrimMaterial();
+        cycler(g, px, trimY, "Trim Material", Trims.INSTANCE.display(matShown));
+        g.text(font, "Trim Pattern", px, trimView[1] - 11, TEXT_MUTE, false);
+        renderTrimGallery(g);
+    }
+
+    private void renderTrimGallery(GuiGraphicsExtractor g) {
+        if (trimView == null) return;
+        int vx = trimView[0], vy = trimView[1], vw = trimView[2], vh = trimView[3];
+        if (vh <= 0) return;
+        insetBox(g, vx, vy, vw, vh);
+        g.enableScissor(vx, vy, vx + vw, vy + vh);
+        ArmorPiece p = CONFIG.armorPiece(selSlot);
+        int dye = Colors.hsvToRgb(colH, colS, colV);
+        String mat = p.getTrimMaterial().isEmpty() ? DEFAULT_MAT : p.getTrimMaterial();
+        String selPat = p.getTrimPattern();
+        int stepX = trimTileW + 8, stepY = trimTileH + 8;
+        for (int i = 0; i < trimPatternIds.size(); i++) {
+            int c = i % trimCols, r = i / trimCols;
+            int tx = vx + c * stepX;
+            int ty = vy + r * stepY - trimScroll;
+            if (ty + trimTileH < vy || ty > vy + vh) continue;
+            String pid = trimPatternIds.get(i);
+            boolean isSel = pid.equals(selPat);
+            boolean hov = mx >= tx && mx < tx + trimTileW && my >= vy && my <= vy + vh && my >= ty && my < ty + trimTileH;
+            g.fill(tx, ty, tx + trimTileW, ty + trimTileH, isSel ? SEL_BG : (hov ? SURFACE_HI : INSET));
+            ItemStack stack = ArmorSpoofer.previewStack(selSlot, dye, pid, mat);
+            float sc = 1.7f;
+            int isz = Math.round(16 * sc);
+            bigItem(g, stack, tx + (trimTileW - isz) / 2, ty + 3, sc);
+            String nm = Trims.INSTANCE.display(pid);
+            g.text(font, clip(nm, trimTileW / 6 + 1),
+                tx + (trimTileW - Math.min(font.width(nm), trimTileW - 2)) / 2, ty + trimTileH - 9,
+                isSel || hov ? TEXT : TEXT_FAINT, false);
+            if (isSel) outline(g, tx, ty, trimTileW, trimTileH, ACCENT);
+        }
+        g.disableScissor();
+        border(g, vx, vy, vw, vh, LINE);
+        scrollbar(g, trimView, trimScroll, trimMaxScroll);
+    }
+
+    private void bigItem(GuiGraphicsExtractor g, ItemStack stack, int x, int y, float scale) {
+        var pose = g.pose();
+        pose.pushMatrix();
+        pose.translate(x, y);
+        pose.scale(scale, scale);
+        g.item(stack, 0, 0);
+        pose.popMatrix();
     }
 
     // cape tab
@@ -564,7 +666,9 @@ public class AppearanceEditorScreen extends Screen {
                 g.fill(ix + pwx / 2 - 5, iy + phx / 2 - 1, ix + pwx / 2 + 5, iy + phx / 2 + 1, TEXT);
                 g.fill(ix + pwx / 2 - 1, iy + phx / 2 - 5, ix + pwx / 2 + 1, iy + phx / 2 + 5, TEXT);
             } else if (Capes.NONE.equals(id)) {
-                g.text(font, "—", ix + pwx / 2 - 2, iy + phx / 2 - 4, TEXT_FAINT, false);
+                // blank cape thumbnail (no design)
+                g.fill(ix, iy, ix + pwx, iy + phx, 0xFFBFBFC8);
+                border(g, ix, iy, pwx, phx, 0xFF6A6A74);
             } else {
                 Identifier tex = CapeSpoofer.INSTANCE.textureIdFor(id);
                 if (tex != null) {
@@ -585,10 +689,10 @@ public class AppearanceEditorScreen extends Screen {
             if (isSel) outline(g, tx, ty, capeTileW, capeTileH, ACCENT);
         }
         g.disableScissor();
+        border(g, vx, vy, vw, vh, LINE); // redraw clean border over tile edges
         scrollbar(g, capeView, capeScroll, capeMaxScroll);
 
         if (capeNameBox != null) g.text(font, "name", px, panelBottom - 15, TEXT_FAINT, false);
-        else g.text(font, "+ import   × remove", px, panelBottom - 9, TEXT_FAINT, false);
     }
 
     // skull tab
@@ -666,7 +770,8 @@ public class AppearanceEditorScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
         this.mx = mouseX; this.my = mouseY;
-        g.fillGradient(0, 0, width, height, BG_TOP, BG_BOT);
+        if (CONFIG.getBgImage()) g.blit(RenderPipelines.GUI_TEXTURED, BG_TEX, 0, 0, 0f, 0f, width, height, width, height, width, height);
+        else g.fillGradient(0, 0, width, height, BG_TOP, BG_BOT);
         super.extractRenderState(g, mouseX, mouseY, partial);
         animateDoll();
 
@@ -690,8 +795,6 @@ public class AppearanceEditorScreen extends Screen {
         }
 
         drawYuri(g);
-        String sv = "self-view only";
-        g.text(font, sv, width - 14 - font.width(sv), height - 12, TEXT_FAINT, false);
     }
 
     private void drawTabs(GuiGraphicsExtractor g) {
@@ -711,39 +814,13 @@ public class AppearanceEditorScreen extends Screen {
     }
 
     private void drawYuri(GuiGraphicsExtractor g) {
-        ensureYuri();
-        if (yuriOk && yuriW > 0 && yuriH > 0) {
-            int maxH = 52, maxW = 110;
-            double s = Math.min((double) maxH / yuriH, (double) maxW / yuriW);
-            int dw = Math.max(1, (int) Math.round(yuriW * s));
-            int dh = Math.max(1, (int) Math.round(yuriH * s));
-            int x = 14, y = height - 14 - dh;
-            g.blit(RenderPipelines.GUI_TEXTURED, YURI_TEX, x, y, 0f, 0f, dw, dh, yuriW, yuriH, yuriW, yuriH);
-        } else {
-            int dw = 52, dh = 52, x = 14, y = height - 14 - dh;
-            insetBox(g, x, y, dw, dh);
-            g.text(font, "yuri", x + (dw - font.width("yuri")) / 2, y + dh / 2 - 4, TEXT_FAINT, false);
-        }
-    }
-
-    private void ensureYuri() {
-        if (yuriTried) return;
-        yuriTried = true;
-        yuriOk = false;
-        try {
-            var res = minecraft.getResourceManager().getResource(YURI_TEX);
-            if (res.isPresent()) {
-                try (InputStream is = res.get().open()) {
-                    NativeImage img = NativeImage.read(is);
-                    yuriW = img.getWidth();
-                    yuriH = img.getHeight();
-                    img.close();
-                    yuriOk = true;
-                }
-            }
-        } catch (Exception ignored) {
-            yuriOk = false;
-        }
+        int x = yuriBtn[0], y = yuriBtn[1], w = yuriBtn[2], h = yuriBtn[3];
+        boolean hov = in(mx, my, yuriBtn);
+        int fill = CONFIG.getBgImage() ? (hov ? BTN_ON_HI : BTN_ON) : (hov ? BTN_OFF_HI : BTN_OFF);
+        g.fill(x, y, x + w, y + h, fill);
+        border(g, x, y, w, h, LINE);
+        String lbl = "yuri";
+        g.text(font, lbl, x + (w - font.width(lbl)) / 2, y + (h - 8) / 2, TEXT, false);
     }
 
     // input
@@ -753,6 +830,7 @@ public class AppearanceEditorScreen extends Screen {
         if (e.button() == 0) {
             double x = e.x(), y = e.y();
             if (tab == TAB_ARMOR && handleColorPick(x, y)) return true;
+            if (tab == TAB_ARMOR && handleTrimClick(x, y)) return true;
             if (tab == TAB_CAPE && handleCapeClick(x, y)) return true;
             if (tab == TAB_SKULL && handleSkullClick(x, y)) return true;
             for (int i = hot.size() - 1; i >= 0; i--) {
@@ -781,11 +859,32 @@ public class AppearanceEditorScreen extends Screen {
             capeScroll = Math.max(0, Math.min(capeMaxScroll, capeScroll - (int) (sy * (capeTileH + 8))));
             return true;
         }
+        if (tab == TAB_ARMOR && trimView != null && in(x, y, trimView)) {
+            trimScroll = Math.max(0, Math.min(trimMaxScroll, trimScroll - (int) (sy * (trimTileH + 8))));
+            return true;
+        }
         if (tab == TAB_SKULL && skullView != null && in(x, y, skullView)) {
             skullScroll = Math.max(0, Math.min(skullMaxScroll, skullScroll - (int) (sy * (skullTile + 4))));
             return true;
         }
         return super.mouseScrolled(x, y, sx, sy);
+    }
+
+    private boolean handleTrimClick(double x, double y) {
+        if (selSlot.equals("HEAD") && CONFIG.getSpoofSkull()) return false;
+        if (trimView == null || !in(x, y, trimView)) return false;
+        int stepX = trimTileW + 8, stepY = trimTileH + 8;
+        int lx = (int) (x - trimView[0]), c = lx / stepX;
+        if (c < 0 || c >= trimCols || lx - c * stepX > trimTileW) return false;
+        int r = (int) (y - trimView[1] + trimScroll) / stepY;
+        int idx = r * trimCols + c;
+        if (idx < 0 || idx >= trimPatternIds.size()) return false;
+        String pid = trimPatternIds.get(idx);
+        ArmorPiece p = CONFIG.armorPiece(selSlot);
+        p.setTrimPattern(pid);
+        if (!pid.isEmpty() && p.getTrimMaterial().isEmpty()) p.setTrimMaterial(DEFAULT_MAT);
+        p.setOn(true);
+        return true;
     }
 
     private boolean handleCapeClick(double x, double y) {
@@ -913,7 +1012,7 @@ public class AppearanceEditorScreen extends Screen {
     }
 
     private void dollCard(GuiGraphicsExtractor g) {
-        insetBox(g, dx0, dy0, dx1 - dx0, dy1 - dy0);
+        border(g, dx0, dy0, dx1 - dx0, dy1 - dy0, LINE);
         g.fill(dx0 + 1, dy1 - 17, dx1 - 1, dy1 - 1, 0x33000000);
         renderDoll(g, dx0 + 6, dy0 + 6, dx1 - 6, dy1 - 12, dollSize, dollYaw, dollTilt);
         String cap = tab == TAB_CAPE ? "back view" : "front view";
@@ -952,13 +1051,14 @@ public class AppearanceEditorScreen extends Screen {
     }
 
     private void pill(GuiGraphicsExtractor g, int x, int y, boolean on, boolean locked) {
-        g.fill(x, y, x + PILL_W, y + PILL_H, locked ? TOG_OFF : (on ? TOG_ON : TOG_OFF));
+        int track = locked ? TOG_OFF : (on ? BTN_ON : BTN_OFF);
+        g.fill(x, y, x + PILL_W, y + PILL_H, track);
         border(g, x, y, PILL_W, PILL_H, LINE);
         int kx = on ? x + PILL_W - 9 : x + 1;
-        g.fill(kx, y + 1, kx + 8, y + PILL_H - 1, locked ? TEXT_FAINT : (on ? KNOB_ON : KNOB_OFF));
+        g.fill(kx, y + 1, kx + 8, y + PILL_H - 1, locked ? TEXT_FAINT : 0xFFF2F2F5);
     }
 
-    private void cyclerIcon(GuiGraphicsExtractor g, int x, int y, String label, String value, ItemStack icon) {
+    private void cycler(GuiGraphicsExtractor g, int x, int y, String label, String value) {
         int w = pw, h = 20;
         boolean lh = in(mx, my, new int[]{ x, y, 18, h });
         boolean rh = in(mx, my, new int[]{ x + w - 18, y, 18, h });
@@ -968,10 +1068,8 @@ public class AppearanceEditorScreen extends Screen {
         g.text(font, ">", x + w - 12, y + 6, TEXT, false);
         int midX = x + 20, midW = w - 40;
         g.fill(midX, y, midX + midW, y + h, INSET); border(g, midX, y, midW, h, LINE);
-        if (icon != null && !icon.isEmpty()) g.item(icon, midX + 3, y + 2);
-        else g.text(font, "—", midX + 6, y + 6, TEXT_FAINT, false);
-        g.text(font, label, midX + 22, y + 3, TEXT, false);
-        g.text(font, value, midX + 22, y + 12, TEXT_MUTE, false);
+        g.text(font, label, midX + 6, y + 3, TEXT, false);
+        g.text(font, value, midX + 6, y + 12, TEXT_MUTE, false);
     }
 
     private void scrollbar(GuiGraphicsExtractor g, int[] v, int scroll, int maxScroll) {
@@ -1042,7 +1140,7 @@ public class AppearanceEditorScreen extends Screen {
     }
 
     private EditBox makeBox(int x, int y, int w, String hint, String value, int maxLen) {
-        EditBox box = new EditBox(font, x, y, w, 18, Component.literal(hint));
+        EditBox box = new TransEditBox(font, x, y, w, 18, Component.literal(hint));
         box.setMaxLength(maxLen);
         box.setValue(value);
         box.setHint(Component.literal(hint));

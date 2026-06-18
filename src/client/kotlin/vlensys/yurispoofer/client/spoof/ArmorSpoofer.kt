@@ -15,7 +15,7 @@ object ArmorSpoofer {
     const val FEET = "FEET"
     val SLOTS = listOf(HEAD, CHEST, LEGS, FEET)
 
-    fun enabled(): Boolean = SpoofConfig.spoofArmor
+    fun enabled(): Boolean = SpoofConfig.masterEnabled && SpoofConfig.spoofArmor
 
     @JvmStatic
     fun applyTo(state: HumanoidRenderState) {

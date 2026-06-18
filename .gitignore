@@ -39,3 +39,7 @@ $RECYCLE.BIN/
 
 # generated sources (genSources output)
 src/*/java_gen/
+
+# claude
+.claude/
+CLAUDE.md
