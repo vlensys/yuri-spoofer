@@ -20,8 +20,8 @@ import vlensys.yurispoofer.client.spoof.SpoofConfig;
 // cape image editor
 public class CapeImageEditorScreen extends Screen {
     private static final SpoofConfig CONFIG = SpoofConfig.INSTANCE;
-    private static final int CANVAS_W = CapeSpoofer.CAPE_WIDTH;
-    private static final int CANVAS_H = CapeSpoofer.CAPE_HEIGHT;
+    private static final int PANEL_W = CapeSpoofer.PANEL_WIDTH;
+    private static final int PANEL_H = CapeSpoofer.PANEL_HEIGHT;
 
     private static final int BG_TOP = 0xE00E0E14;
     private static final int BG_BOT = 0xF0060609;
@@ -32,12 +32,14 @@ public class CapeImageEditorScreen extends Screen {
     private static final int GRID = 0x335C5C63;
     private static final int TEXT_LT = 0xFFF0F0F2;
     private static final int TEXT_MUTE = 0xFF9A9AA0;
-    private static final int WARN = 0xFFFFD166;
 
     private final String sourcePath;
     private Identifier sourceTexture;
-    private int sourceW = 0, sourceH = 0;
-    private int editX = 0, editY = 0, editW = CANVAS_W, editH = CANVAS_H;
+    private int rawW = 0, rawH = 0, sourceW = 0, sourceH = 0;
+    private int targetScale = 1;
+    private int panelW = PANEL_W, panelH = PANEL_H;
+    private int editX = 0, editY = 0, editW = PANEL_W, editH = PANEL_H;
+    private int rotation = 0;
     private String status = "";
     private boolean loaded = false;
 
@@ -52,28 +54,30 @@ public class CapeImageEditorScreen extends Screen {
     protected void init() {
         if (!loaded) loadSource();
 
-        int controlY = Math.min(height - 58, canvasY() + canvasScale() * CANVAS_H + 20);
-        int x = Math.max(12, (width - 308) / 2);
-        xBox = field(x + 16, controlY, 44, "x", editX);
-        yBox = field(x + 76, controlY, 44, "y", editY);
-        wBox = field(x + 136, controlY, 50, "w", editW);
-        hBox = field(x + 202, controlY, 50, "h", editH);
+        int controlY = Math.min(height - 58, canvasY() + canvasHeight() + 18);
+        int x = Math.max(12, (width - 362) / 2);
+        xBox = field(x + 16, controlY, 50, "x", editX);
+        yBox = field(x + 82, controlY, 50, "y", editY);
+        wBox = field(x + 148, controlY, 56, "w", editW);
+        hBox = field(x + 220, controlY, 56, "h", editH);
 
         addRenderableWidget(Button.builder(Component.literal("fit"), b -> { fitSource(); syncBoxes(); })
             .pos(x, controlY + 24).size(44, 18).build());
         addRenderableWidget(Button.builder(Component.literal("center"), b -> { centerFrame(); syncBoxes(); })
             .pos(x + 48, controlY + 24).size(54, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("64 x 32"), b -> { useRecommended(); syncBoxes(); })
-            .pos(x + 106, controlY + 24).size(62, 18).build());
+        addRenderableWidget(Button.builder(Component.literal("full"), b -> { fillPanel(); syncBoxes(); })
+            .pos(x + 106, controlY + 24).size(44, 18).build());
+        addRenderableWidget(Button.builder(Component.literal("rotate"), b -> rotateImage())
+            .pos(x + 154, controlY + 24).size(58, 18).build());
         addRenderableWidget(Button.builder(Component.literal("save"), b -> saveCape())
-            .pos(x + 172, controlY + 24).size(54, 18).build());
+            .pos(x + 216, controlY + 24).size(54, 18).build());
         addRenderableWidget(Button.builder(Component.literal("cancel"), b -> minecraft.setScreen(new AppearanceEditorScreen()))
-            .pos(x + 230, controlY + 24).size(64, 18).build());
+            .pos(x + 274, controlY + 24).size(64, 18).build());
     }
 
     private EditBox field(int x, int y, int w, String name, int value) {
         EditBox box = new EditBox(font, x, y, w, 18, Component.literal(name));
-        box.setMaxLength(5);
+        box.setMaxLength(7);
         box.setValue(String.valueOf(value));
         addRenderableWidget(box);
         return box;
@@ -81,44 +85,79 @@ public class CapeImageEditorScreen extends Screen {
 
     private void loadSource() {
         try {
-            NativeImage img;
-            try (InputStream input = Files.newInputStream(Path.of(sourcePath))) {
-                img = NativeImage.read(input);
-            }
-            sourceW = img.getWidth();
-            sourceH = img.getHeight();
-            sourceTexture = Identifier.fromNamespaceAndPath("yuri-spoofer", "cape/editor/" + Integer.toHexString(sourcePath.hashCode()));
-            minecraft.getTextureManager().register(sourceTexture, new DynamicTexture(() -> "yuri-cape-editor", img));
+            refreshTexture();
+            targetScale = recommendedScale();
+            panelW = PANEL_W * targetScale;
+            panelH = PANEL_H * targetScale;
             fitSource();
-            if (sourceW > CANVAS_W || sourceH > CANVAS_H) {
-                status = "image too big, use recommended 64 x 32?";
-            } else {
-                status = "recommended 64 x 32";
-            }
+            refreshStatus();
         } catch (Exception e) {
             status = "could not open image";
         }
         loaded = true;
     }
 
+    private void refreshTexture() throws Exception {
+        NativeImage img;
+        try (InputStream input = Files.newInputStream(Path.of(sourcePath))) {
+            img = NativeImage.read(input);
+        }
+        rawW = img.getWidth();
+        rawH = img.getHeight();
+        NativeImage preview = rotate(img, rotation);
+        img.close();
+        sourceW = preview.getWidth();
+        sourceH = preview.getHeight();
+        sourceTexture = Identifier.fromNamespaceAndPath("yuri-spoofer", "cape/editor/" + Integer.toHexString(sourcePath.hashCode()) + "/" + rotation);
+        minecraft.getTextureManager().register(sourceTexture, new DynamicTexture(() -> "yuri-cape-editor", preview));
+    }
+
+    private int recommendedScale() {
+        int rw = Math.max(1, sourceW);
+        int rh = Math.max(1, sourceH);
+        int scale = (int) Math.ceil(Math.max((double) rw / PANEL_W, (double) rh / PANEL_H));
+        return Math.max(1, Math.min(CapeSpoofer.MAX_SCALE, scale));
+    }
+
+    private void refreshStatus() {
+        int outW = CapeSpoofer.SHEET_WIDTH * targetScale;
+        int outH = CapeSpoofer.SHEET_HEIGHT * targetScale;
+        status = "high res cape, saves " + outW + " x " + outH + ", panel " + panelW + " x " + panelH;
+    }
+
     private void fitSource() {
         if (sourceW <= 0 || sourceH <= 0) return;
-        double scale = Math.min((double) CANVAS_W / sourceW, (double) CANVAS_H / sourceH);
+        double scale = Math.min((double) panelW / sourceW, (double) panelH / sourceH);
         editW = Math.max(1, (int) Math.round(sourceW * scale));
         editH = Math.max(1, (int) Math.round(sourceH * scale));
         centerFrame();
     }
 
     private void centerFrame() {
-        editX = (CANVAS_W - editW) / 2;
-        editY = (CANVAS_H - editH) / 2;
+        editX = (panelW - editW) / 2;
+        editY = (panelH - editH) / 2;
     }
 
-    private void useRecommended() {
+    private void fillPanel() {
         editX = 0;
         editY = 0;
-        editW = CANVAS_W;
-        editH = CANVAS_H;
+        editW = panelW;
+        editH = panelH;
+    }
+
+    private void rotateImage() {
+        rotation = (rotation + 1) & 3;
+        try {
+            refreshTexture();
+            targetScale = recommendedScale();
+            panelW = PANEL_W * targetScale;
+            panelH = PANEL_H * targetScale;
+            fitSource();
+            syncBoxes();
+            refreshStatus();
+        } catch (Exception e) {
+            status = "could not rotate image";
+        }
     }
 
     private void syncBoxes() {
@@ -129,10 +168,10 @@ public class CapeImageEditorScreen extends Screen {
     }
 
     private void readBoxes() {
-        editX = parseBox(xBox, editX, -4096, 4096);
-        editY = parseBox(yBox, editY, -4096, 4096);
-        editW = parseBox(wBox, editW, 1, 4096);
-        editH = parseBox(hBox, editH, 1, 4096);
+        editX = parseBox(xBox, editX, -262144, 262144);
+        editY = parseBox(yBox, editY, -262144, 262144);
+        editW = parseBox(wBox, editW, 1, 262144);
+        editH = parseBox(hBox, editH, 1, 262144);
     }
 
     private int parseBox(EditBox box, int fallback, int min, int max) {
@@ -146,7 +185,7 @@ public class CapeImageEditorScreen extends Screen {
 
     private void saveCape() {
         readBoxes();
-        String id = CapeSpoofer.INSTANCE.importCapeEdited(sourcePath, editX, editY, editW, editH);
+        String id = CapeSpoofer.INSTANCE.importCapeEdited(sourcePath, editX, editY, editW, editH, targetScale, rotation);
         if (id == null) {
             status = "could not save cape";
             return;
@@ -162,9 +201,9 @@ public class CapeImageEditorScreen extends Screen {
         g.fillGradient(0, 0, width, height, BG_TOP, BG_BOT);
 
         g.text(font, "cape image editor", 14, 14, TEXT_LT, true);
-        String dims = sourceW > 0 ? sourceW + " x " + sourceH + " source" : "";
+        String dims = rawW > 0 ? rawW + " x " + rawH + " source, rot " + rotation * 90 : "";
         g.text(font, dims, width - 14 - font.width(dims), 15, TEXT_MUTE, true);
-        g.text(font, status, 14, 30, status.startsWith("image too big") ? WARN : TEXT_MUTE, false);
+        g.text(font, status, 14, 30, TEXT_MUTE, false);
 
         renderCanvas(g);
         super.extractRenderState(g, mouseX, mouseY, partial);
@@ -172,11 +211,11 @@ public class CapeImageEditorScreen extends Screen {
     }
 
     private void renderCanvas(GuiGraphicsExtractor g) {
-        int s = canvasScale();
+        double s = canvasScale();
         int x = canvasX();
         int y = canvasY();
-        int w = CANVAS_W * s;
-        int h = CANVAS_H * s;
+        int w = canvasWidth();
+        int h = canvasHeight();
         inset(g, x - 2, y - 2, w + 4, h + 4, DARK);
 
         if (sourceTexture != null && editW > 0 && editH > 0) {
@@ -184,12 +223,12 @@ public class CapeImageEditorScreen extends Screen {
             g.blit(
                 RenderPipelines.GUI_TEXTURED,
                 sourceTexture,
-                x + editX * s,
-                y + editY * s,
+                x + (int) Math.round(editX * s),
+                y + (int) Math.round(editY * s),
                 0f,
                 0f,
-                editW * s,
-                editH * s,
+                Math.max(1, (int) Math.round(editW * s)),
+                Math.max(1, (int) Math.round(editH * s)),
                 sourceW,
                 sourceH,
                 sourceW,
@@ -198,8 +237,15 @@ public class CapeImageEditorScreen extends Screen {
             g.disableScissor();
         }
 
-        for (int gx = 0; gx <= CANVAS_W; gx += 8) g.fill(x + gx * s, y, x + gx * s + 1, y + h, GRID);
-        for (int gy = 0; gy <= CANVAS_H; gy += 8) g.fill(x, y + gy * s, x + w, y + gy * s + 1, GRID);
+        int gridStep = Math.max(1, targetScale);
+        for (int gx = 0; gx <= panelW; gx += gridStep) {
+            int px = x + (int) Math.round(gx * s);
+            g.fill(px, y, px + 1, y + h, GRID);
+        }
+        for (int gy = 0; gy <= panelH; gy += gridStep) {
+            int py = y + (int) Math.round(gy * s);
+            g.fill(x, py, x + w, py + 1, GRID);
+        }
         outline(g, x, y, w, h, PANEL_HI);
     }
 
@@ -211,14 +257,22 @@ public class CapeImageEditorScreen extends Screen {
         g.text(font, "h", hBox.getX() - 10, hBox.getY() + 5, TEXT_MUTE, false);
     }
 
-    private int canvasScale() {
-        int maxW = Math.max(2, (width - 40) / CANVAS_W);
-        int maxH = Math.max(2, (height - 145) / CANVAS_H);
-        return Math.max(2, Math.min(8, Math.min(maxW, maxH)));
+    private double canvasScale() {
+        double maxW = (width - 80.0) / Math.max(1, panelW);
+        double maxH = (height - 150.0) / Math.max(1, panelH);
+        return Math.max(0.05, Math.min(16.0, Math.min(maxW, maxH)));
+    }
+
+    private int canvasWidth() {
+        return Math.max(1, (int) Math.round(panelW * canvasScale()));
+    }
+
+    private int canvasHeight() {
+        return Math.max(1, (int) Math.round(panelH * canvasScale()));
     }
 
     private int canvasX() {
-        return (width - CANVAS_W * canvasScale()) / 2;
+        return (width - canvasWidth()) / 2;
     }
 
     private int canvasY() {
@@ -228,6 +282,37 @@ public class CapeImageEditorScreen extends Screen {
     @Override
     public void onClose() {
         minecraft.setScreen(new AppearanceEditorScreen());
+    }
+
+    private static NativeImage rotate(NativeImage src, int rotation) {
+        int rot = ((rotation % 4) + 4) % 4;
+        if (rot == 0) {
+            NativeImage out = new NativeImage(src.getWidth(), src.getHeight(), true);
+            copy(src, out, 0);
+            return out;
+        }
+        int rw = rot % 2 == 0 ? src.getWidth() : src.getHeight();
+        int rh = rot % 2 == 0 ? src.getHeight() : src.getWidth();
+        NativeImage out = new NativeImage(rw, rh, true);
+        copy(src, out, rot);
+        return out;
+    }
+
+    private static void copy(NativeImage src, NativeImage out, int rotation) {
+        for (int y = 0; y < out.getHeight(); y++) {
+            for (int x = 0; x < out.getWidth(); x++) {
+                out.setPixel(x, y, rotatedPixel(src, x, y, rotation));
+            }
+        }
+    }
+
+    private static int rotatedPixel(NativeImage img, int x, int y, int rotation) {
+        return switch (rotation) {
+            case 1 -> img.getPixel(y, img.getHeight() - 1 - x);
+            case 2 -> img.getPixel(img.getWidth() - 1 - x, img.getHeight() - 1 - y);
+            case 3 -> img.getPixel(img.getWidth() - 1 - y, x);
+            default -> img.getPixel(x, y);
+        };
     }
 
     private static void inset(GuiGraphicsExtractor g, int x, int y, int w, int h, int face) {

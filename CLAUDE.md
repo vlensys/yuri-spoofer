@@ -34,7 +34,7 @@ The codebase is split into two source sets:
 ### Core Data Flow
 
 ```
-User opens GUI (Ctrl+H) → SpooferScreen → SpoofConfig (persisted JSON)
+User opens GUI (H key or inventory paintbrush) → AppearanceEditorScreen → SpoofConfig (persisted JSON)
                                                     ↓
 Minecraft renders text → Mixin hook intercepts → Spoofer.spoof(component)
                                                     ↓
@@ -48,9 +48,8 @@ Minecraft renders text → Mixin hook intercepts → Spoofer.spoof(component)
 | `src/client/kotlin/.../client/spoof/Spoofer.kt` | Core text replacement engine; converts components to §-strings, applies regex substitutions, re-parses |
 | `src/client/kotlin/.../client/spoof/SpoofConfig.kt` | JSON config (Fabric config dir); master toggle + per-feature toggles + custom text fields |
 | `src/client/kotlin/.../client/spoof/Ranks.kt` | Rank preset table with §-coded prefixes and derived name colors |
-| `src/client/java/.../client/gui/SpooferScreen.java` | Text-spoof settings GUI (opened with `H`): rank grid, name/level/lobby/skill/slayer/currency inputs |
-| `src/client/java/.../client/gui/AppearanceEditorScreen.java` | Appearance editor (opened by the inventory paintbrush): live player paper-doll + Armor / Cape / Skull tabs, color wheel, trim pickers, icon galleries |
-| `src/client/java/.../client/gui/PaintbrushButton.java` | Icon button added to the inventory (via Fabric `ScreenEvents.AFTER_INIT`) that opens the editor |
+| `src/client/java/.../client/gui/AppearanceEditorScreen.java` | Single unified, minimal flat-dark GUI (opened by the `H` key **and** the inventory paintbrush). Tab bar: **Profile** (name/rank grid/level/lobby), **Stats** (skills/slayers/currency), **Armor**, **Cape**, **Skull**. Live player paper-doll on the right, color wheel, trim pickers (each cycler icon shows the actual selected pattern template / material ingredient), icon galleries, master toggle, and the `yuri.png` badge pinned bottom-left |
+| `src/client/java/.../client/gui/PaintbrushButton.java` | Minimal paintbrush icon added to the inventory (via Fabric `ScreenEvents.AFTER_INIT`) that opens the editor (icon-only, faint hover, no bevel) |
 | `src/client/kotlin/.../client/spoof/CapeSpoofer.kt`, `Capes.kt` | Cape override; official Mojang capes referenced by public hash from textures.minecraft.net + custom file/URL |
 | `src/client/kotlin/.../client/spoof/ArmorSpoofer.kt`, `Trims.kt`, `Colors.kt`, `ColorWheel.kt` | Per-slot fake armor (dyed leather + trim) + trim registry helpers + HSV color wheel |
 | `src/client/kotlin/.../client/spoof/SkullSpoofer.kt`, `Skulls.kt`, `HeadIcons.kt` | Custom skull/head helmet + bundled SkyBlock head DB (`assets/yuri-spoofer/skulls.json`) + async gallery icons |

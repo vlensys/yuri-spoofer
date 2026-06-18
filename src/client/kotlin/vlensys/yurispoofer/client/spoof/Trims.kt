@@ -2,8 +2,11 @@ package vlensys.yurispoofer.client.spoof
 
 import net.minecraft.client.Minecraft
 import net.minecraft.core.Holder
+import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.core.registries.Registries
+import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
+import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.equipment.trim.TrimMaterial
 import net.minecraft.world.item.equipment.trim.TrimMaterials
 import net.minecraft.world.item.equipment.trim.TrimPattern
@@ -34,6 +37,32 @@ object Trims {
 
     fun display(id: String): String =
         if (id.isEmpty()) "None" else id.replaceFirstChar { it.uppercase() }
+
+    // ingredient item per trim material (for the gui icon)
+    private val MATERIAL_ITEM: Map<String, String> = mapOf(
+        "quartz" to "quartz",
+        "iron" to "iron_ingot",
+        "gold" to "gold_ingot",
+        "copper" to "copper_ingot",
+        "netherite" to "netherite_ingot",
+        "redstone" to "redstone",
+        "emerald" to "emerald",
+        "diamond" to "diamond",
+        "lapis" to "lapis_lazuli",
+        "amethyst" to "amethyst_shard",
+        "resin" to "resin_brick",
+    )
+
+    // gui icon that actually matches the selected trim pattern (its smithing template)
+    fun patternIcon(id: String): ItemStack =
+        if (id.isEmpty()) ItemStack.EMPTY else itemById("${id}_armor_trim_smithing_template")
+
+    // gui icon that actually matches the selected trim material (its ingredient)
+    fun materialIcon(id: String): ItemStack =
+        if (id.isEmpty()) ItemStack.EMPTY else itemById(MATERIAL_ITEM[id] ?: return ItemStack.EMPTY)
+
+    private fun itemById(path: String): ItemStack =
+        ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.fromNamespaceAndPath("minecraft", path)))
 
     fun materialHolder(id: String): Holder<TrimMaterial>? {
         val key = materialByid[id] ?: return null

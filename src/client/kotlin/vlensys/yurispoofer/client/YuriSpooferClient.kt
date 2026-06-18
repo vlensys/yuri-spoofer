@@ -14,7 +14,6 @@ import net.minecraft.resources.Identifier
 import org.lwjgl.glfw.GLFW
 import vlensys.yurispoofer.client.gui.AppearanceEditorScreen
 import vlensys.yurispoofer.client.gui.PaintbrushButton
-import vlensys.yurispoofer.client.gui.SpooferScreen
 import vlensys.yurispoofer.client.spoof.CurrencySpoofer
 import vlensys.yurispoofer.client.spoof.LevelSpoofer
 import vlensys.yurispoofer.client.spoof.SkillSpoofer
@@ -67,7 +66,7 @@ object YuriSpooferClient : ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(
             ClientTickEvents.EndTick { mc ->
                 while (openKey.consumeClick()) {
-                    mc.setScreen(SpooferScreen())
+                    mc.setScreen(AppearanceEditorScreen())
                 }
             }
         )

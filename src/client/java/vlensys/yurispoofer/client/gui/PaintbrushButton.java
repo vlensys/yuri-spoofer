@@ -15,10 +15,7 @@ public class PaintbrushButton extends AbstractWidget {
     private static final int ICON_H = 849;
 
     // palette
-    private static final int FACE    = 0xFFC6C6C6;
-    private static final int FACE_HI = 0xFFD8D8D8;
-    private static final int HILIGHT = 0xFFFFFFFF;
-    private static final int SHADOW  = 0xFF555555;
+    private static final int HOVER = 0x22FFFFFF;
 
     private final Runnable action;
 
@@ -35,13 +32,9 @@ public class PaintbrushButton extends AbstractWidget {
     @Override
     protected void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
         int x = getX(), y = getY(), w = width, h = height;
-        boolean hov = isHovered();
-        g.fill(x, y, x + w, y + h, hov ? FACE_HI : FACE);
-        g.fill(x, y, x + w, y + 1, HILIGHT);
-        g.fill(x, y, x + 1, y + h, HILIGHT);
-        g.fill(x + w - 1, y, x + w, y + h, SHADOW);
-        g.fill(x, y + h - 1, x + w, y + h, SHADOW);
-        int iconH = Math.min(16, h - 2);
+        // minimal: just the brush, with a faint highlight on hover (no bevel box)
+        if (isHovered()) g.fill(x, y, x + w, y + h, HOVER);
+        int iconH = Math.min(h, h);
         int iconW = Math.max(1, iconH * ICON_W / ICON_H);
         int iconX = x + (w - iconW) / 2;
         int iconY = y + (h - iconH) / 2;
