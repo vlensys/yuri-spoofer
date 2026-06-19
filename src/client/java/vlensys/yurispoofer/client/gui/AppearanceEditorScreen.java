@@ -50,22 +50,26 @@ public class AppearanceEditorScreen extends Screen {
     private static final Slayers    SLAYERS = Slayers.INSTANCE;
     private static final Currencies CURRS   = Currencies.INSTANCE;
 
-    // flat dark palette, white/neutral accent
-    private static final int BG_TOP     = 0xF00B0B11;
-    private static final int BG_BOT     = 0xF8050508;
-    private static final int SURFACE    = 0xC015151B;
-    private static final int SURFACE_HI = 0xC820202A;
-    private static final int INSET      = 0xB00A0A0E;
-    private static final int LINE       = 0xCC2A2A33;
-    private static final int SEL_BG     = 0xCC23232E;
+    // flat warm-dark palette tuned to sit on the warm cream/brown background image;
+    // neutral greys are kept warm (R≥G≥B) instead of blue-grey, and tiles are a touch
+    // more opaque so the bright window area doesn't bleed through unevenly. Accent stays pure white.
+    private static final int BG_TOP     = 0xF0100C0A;
+    private static final int BG_BOT     = 0xF8080605;
+    // box fills are a TRANSLUCENT warm rose/mauve (not solid dark grey) so they take on the
+    // warm background instead of reading as grey blocks sitting on top of it.
+    private static final int SURFACE    = 0x8C2A2028;
+    private static final int SURFACE_HI = 0xB23A2C36;
+    private static final int INSET      = 0x8C1E161C;
+    private static final int LINE       = 0xCC5A4652;
+    private static final int SEL_BG     = 0xCA4A2E3C;
     private static final int ACCENT     = 0xFFFFFFFF;
-    private static final int TOG_ON     = 0xFFE9E9EE;
-    private static final int TOG_OFF    = 0xFF34343C;
-    private static final int KNOB_ON    = 0xFF101015;
-    private static final int KNOB_OFF   = 0xFF9A9AA2;
-    private static final int TEXT       = 0xFFE9E9EE;
-    private static final int TEXT_MUTE  = 0xFF9A9AA2;
-    private static final int TEXT_FAINT = 0xFF5E5E68;
+    private static final int TOG_ON     = 0xFFF2EFEA;
+    private static final int TOG_OFF    = 0xFF38332C;
+    private static final int KNOB_ON    = 0xFF14110D;
+    private static final int KNOB_OFF   = 0xFFA8A094;
+    private static final int TEXT       = 0xFFF2EFEA;
+    private static final int TEXT_MUTE  = 0xFFB4AB9E;
+    private static final int TEXT_FAINT = 0xFF837A6E;
     private static final int ON_DOT     = 0xFF4CA32C;
 
     // master enable button (bottom-left): green = on, red = off
@@ -667,8 +671,8 @@ public class AppearanceEditorScreen extends Screen {
                 g.fill(ix + pwx / 2 - 1, iy + phx / 2 - 5, ix + pwx / 2 + 1, iy + phx / 2 + 5, TEXT);
             } else if (Capes.NONE.equals(id)) {
                 // blank cape thumbnail (no design)
-                g.fill(ix, iy, ix + pwx, iy + phx, 0xFFBFBFC8);
-                border(g, ix, iy, pwx, phx, 0xFF6A6A74);
+                g.fill(ix, iy, ix + pwx, iy + phx, 0xFFC4BCB0);
+                border(g, ix, iy, pwx, phx, 0xFF6E665C);
             } else {
                 Identifier tex = CapeSpoofer.INSTANCE.textureIdFor(id);
                 if (tex != null) {
@@ -768,10 +772,16 @@ public class AppearanceEditorScreen extends Screen {
     // render
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        this.mx = mouseX; this.my = mouseY;
+    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
+        // draw ONLY our background here and skip super: vanilla otherwise lays a blur +
+        // a translucent in-world menu tint over the screen, which is the grey wash on yuri mode.
         if (CONFIG.getBgImage()) g.blit(RenderPipelines.GUI_TEXTURED, BG_TEX, 0, 0, 0f, 0f, width, height, width, height, width, height);
         else g.fillGradient(0, 0, width, height, BG_TOP, BG_BOT);
+    }
+
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
+        this.mx = mouseX; this.my = mouseY;
         super.extractRenderState(g, mouseX, mouseY, partial);
         animateDoll();
 
@@ -1055,7 +1065,7 @@ public class AppearanceEditorScreen extends Screen {
         g.fill(x, y, x + PILL_W, y + PILL_H, track);
         border(g, x, y, PILL_W, PILL_H, LINE);
         int kx = on ? x + PILL_W - 9 : x + 1;
-        g.fill(kx, y + 1, kx + 8, y + PILL_H - 1, locked ? TEXT_FAINT : 0xFFF2F2F5);
+        g.fill(kx, y + 1, kx + 8, y + PILL_H - 1, locked ? TEXT_FAINT : TOG_ON);
     }
 
     private void cycler(GuiGraphicsExtractor g, int x, int y, String label, String value) {
@@ -1078,7 +1088,7 @@ public class AppearanceEditorScreen extends Screen {
         int thumbH = Math.max(16, (int) ((float) vh / (vh + maxScroll) * vh));
         int thumbY = vy + (int) ((float) scroll / maxScroll * (vh - thumbH));
         g.fill(vx + vw - 3, vy, vx + vw, vy + vh, INSET);
-        g.fill(vx + vw - 3, thumbY, vx + vw, thumbY + thumbH, 0xFF55555E);
+        g.fill(vx + vw - 3, thumbY, vx + vw, thumbY + thumbH, 0xFF5E564C);
     }
 
     private void ring(GuiGraphicsExtractor g, int cx, int cy) {

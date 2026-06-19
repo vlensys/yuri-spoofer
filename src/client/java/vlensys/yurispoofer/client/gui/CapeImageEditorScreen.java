@@ -3,12 +3,13 @@ package vlensys.yurispoofer.client.gui;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
@@ -17,70 +18,113 @@ import net.minecraft.resources.Identifier;
 import vlensys.yurispoofer.client.spoof.CapeSpoofer;
 import vlensys.yurispoofer.client.spoof.SpoofConfig;
 
-// cape image editor
+// cape image editor: a flat, warm crop canvas. scroll = zoom, drag = move; the
+// cape-shaped frame is the crop region that gets saved.
 public class CapeImageEditorScreen extends Screen {
     private static final SpoofConfig CONFIG = SpoofConfig.INSTANCE;
     private static final int PANEL_W = CapeSpoofer.PANEL_WIDTH;
     private static final int PANEL_H = CapeSpoofer.PANEL_HEIGHT;
 
-    private static final int BG_TOP = 0xE00E0E14;
-    private static final int BG_BOT = 0xF0060609;
-    private static final int PANEL = 0xFFC6C6C6;
-    private static final int PANEL_HI = 0xFFFFFFFF;
-    private static final int PANEL_SH = 0xFF545459;
-    private static final int DARK = 0xFF1B1B20;
-    private static final int GRID = 0x335C5C63;
-    private static final int TEXT_LT = 0xFFF0F0F2;
-    private static final int TEXT_MUTE = 0xFF9A9AA0;
+    // warm-dark palette, matched to the appearance editor so the two screens feel like one app
+    private static final int BG_TOP      = 0xF0100C0A;
+    private static final int BG_BOT      = 0xF8080605;
+    private static final int VIEW_BG     = 0xB0241A22;   // editing area (translucent warm)
+    private static final int DIMMED      = 0x99000000;   // overlay over the cropped-away region
+    private static final int FRAME       = 0xFFFFFFFF;   // crop frame (accent)
+    private static final int GRID        = 0x3CFFFFFF;   // cape-pixel guide grid inside the frame
+    private static final int LINE        = 0xCC5A4652;
+    private static final int SURFACE     = 0x8C2A2028;
+    private static final int SURFACE_HI  = 0xB23A2C36;
+    private static final int TEXT        = 0xFFF2EFEA;
+    private static final int TEXT_MUTE   = 0xFFB4AB9E;
+    private static final int TEXT_FAINT  = 0xFF837A6E;
+    private static final int BTN_SAVE    = 0xFF2F9E44;
+    private static final int BTN_SAVE_HI = 0xFF37B24D;
+
+    private static final Identifier BG_TEX =
+        Identifier.fromNamespaceAndPath("yuri-spoofer", "textures/gui/background.png");
 
     private final String sourcePath;
     private Identifier sourceTexture;
     private int rawW = 0, rawH = 0, sourceW = 0, sourceH = 0;
     private int targetScale = 1;
     private int panelW = PANEL_W, panelH = PANEL_H;
-    private int editX = 0, editY = 0, editW = PANEL_W, editH = PANEL_H;
-    private int rotation = 0;
-    private String status = "";
-    private boolean loaded = false;
 
-    private EditBox xBox, yBox, wBox, hBox;
+    // image placement, in panel-space units (the same space importCapeEdited expects).
+    // doubles for smooth zoom/pan; rounded on save.
+    private double editX = 0, editY = 0, editW = PANEL_W, editH = PANEL_H;
+    private int rotation = 0;
+    private boolean loaded = false;
+    private String error = null;
+
+    // layout (recomputed in init / on resize)
+    private int viewX, viewY, viewW, viewH;
+    private int frameX, frameY, frameW, frameH;
+    private double frameScale = 1.0;
+    private float mx, my;
+
+    // flat buttons
+    private final List<int[]> btnRects = new ArrayList<>();
+    private final List<String> btnLabels = new ArrayList<>();
+    private final List<Runnable> btnActs = new ArrayList<>();
+    private int saveBtnIndex = -1;
 
     public CapeImageEditorScreen(String sourcePath) {
-        super(Component.literal("cape image editor"));
+        super(Component.literal("edit cape"));
         this.sourcePath = sourcePath;
     }
 
     @Override
     protected void init() {
         if (!loaded) loadSource();
+        layout();
 
-        int controlY = Math.min(height - 58, canvasY() + canvasHeight() + 18);
-        int x = Math.max(12, (width - 362) / 2);
-        xBox = field(x + 16, controlY, 50, "x", editX);
-        yBox = field(x + 82, controlY, 50, "y", editY);
-        wBox = field(x + 148, controlY, 56, "w", editW);
-        hBox = field(x + 220, controlY, 56, "h", editH);
-
-        addRenderableWidget(Button.builder(Component.literal("fit"), b -> { fitSource(); syncBoxes(); })
-            .pos(x, controlY + 24).size(44, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("center"), b -> { centerFrame(); syncBoxes(); })
-            .pos(x + 48, controlY + 24).size(54, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("full"), b -> { fillPanel(); syncBoxes(); })
-            .pos(x + 106, controlY + 24).size(44, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("rotate"), b -> rotateImage())
-            .pos(x + 154, controlY + 24).size(58, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("save"), b -> saveCape())
-            .pos(x + 216, controlY + 24).size(54, 18).build());
-        addRenderableWidget(Button.builder(Component.literal("cancel"), b -> minecraft.setScreen(new AppearanceEditorScreen()))
-            .pos(x + 274, controlY + 24).size(64, 18).build());
+        btnRects.clear(); btnLabels.clear(); btnActs.clear(); saveBtnIndex = -1;
+        addButtons();
     }
 
-    private EditBox field(int x, int y, int w, String name, int value) {
-        EditBox box = new EditBox(font, x, y, w, 18, Component.literal(name));
-        box.setMaxLength(7);
-        box.setValue(String.valueOf(value));
-        addRenderableWidget(box);
-        return box;
+    private void addButtons() {
+        String[] labels = { "fit", "fill", "rotate", "cancel", "save" };
+        Runnable[] acts = {
+            () -> { fit(); },
+            () -> { fill(); },
+            this::rotateImage,
+            () -> minecraft.setScreen(new AppearanceEditorScreen()),
+            this::saveCape,
+        };
+        int bw = 56, bh = 18, gap = 8;
+        int groupW = labels.length * bw + (labels.length - 1) * gap;
+        int sx = (width - groupW) / 2;
+        int by = height - 16 - bh;
+        for (int i = 0; i < labels.length; i++) {
+            int x = sx + i * (bw + gap);
+            btnRects.add(new int[]{ x, by, bw, bh });
+            btnLabels.add(labels[i]);
+            btnActs.add(acts[i]);
+            if (labels[i].equals("save")) saveBtnIndex = i;
+        }
+    }
+
+    private void layout() {
+        int margin = 16, btnRowH = 24;
+        viewX = margin;
+        viewY = 36;
+        viewW = width - margin * 2;
+        viewH = height - viewY - margin - btnRowH - 6;
+        if (viewH < 60) viewH = 60;
+
+        // crop frame: cape panel aspect (10:16, portrait), centred, with breathing room
+        // so the parts being cropped out stay visible around it
+        double pad = 0.84;
+        int fh = (int) (viewH * pad);
+        int fw = (int) Math.round(fh * (PANEL_W / (double) PANEL_H));
+        int fwMax = (int) (viewW * pad);
+        if (fw > fwMax) { fw = fwMax; fh = (int) Math.round(fw * (PANEL_H / (double) PANEL_W)); }
+        frameW = Math.max(1, fw);
+        frameH = Math.max(1, fh);
+        frameX = viewX + (viewW - frameW) / 2;
+        frameY = viewY + (viewH - frameH) / 2;
+        frameScale = frameW / (double) panelW;
     }
 
     private void loadSource() {
@@ -89,10 +133,10 @@ public class CapeImageEditorScreen extends Screen {
             targetScale = recommendedScale();
             panelW = PANEL_W * targetScale;
             panelH = PANEL_H * targetScale;
-            fitSource();
-            refreshStatus();
+            fit();
+            error = null;
         } catch (Exception e) {
-            status = "could not open image";
+            error = "could not open image";
         }
         loaded = true;
     }
@@ -119,30 +163,54 @@ public class CapeImageEditorScreen extends Screen {
         return Math.max(1, Math.min(CapeSpoofer.MAX_SCALE, scale));
     }
 
-    private void refreshStatus() {
-        int outW = CapeSpoofer.SHEET_WIDTH * targetScale;
-        int outH = CapeSpoofer.SHEET_HEIGHT * targetScale;
-        status = "high res cape, saves " + outW + " x " + outH + ", panel " + panelW + " x " + panelH;
-    }
+    // one grid cell = one cape-texture pixel, in panel-space units. editX/Y/W/H stay
+    // CONTINUOUS so dragging accumulates smoothly; snapV() snaps only for draw + save,
+    // so the image visibly lands on the grid yet can still be moved freely.
+    private double cell() { return Math.max(1, targetScale); }
+    private double snapV(double v) { double c = cell(); return Math.round(v / c) * c; }
+    private double snapSize(double v) { double c = cell(); return Math.max(c, Math.round(v / c) * c); }
 
-    private void fitSource() {
+    // contain: whole image fits inside the crop frame, centred
+    private void fit() {
         if (sourceW <= 0 || sourceH <= 0) return;
-        double scale = Math.min((double) panelW / sourceW, (double) panelH / sourceH);
-        editW = Math.max(1, (int) Math.round(sourceW * scale));
-        editH = Math.max(1, (int) Math.round(sourceH * scale));
-        centerFrame();
+        double r = Math.min((double) panelW / sourceW, (double) panelH / sourceH);
+        editW = sourceW * r;
+        editH = sourceH * r;
+        center();
     }
 
-    private void centerFrame() {
-        editX = (panelW - editW) / 2;
-        editY = (panelH - editH) / 2;
-    }
-
-    private void fillPanel() {
+    // stretch: image is distorted to fill the whole crop frame exactly
+    private void fill() {
         editX = 0;
         editY = 0;
         editW = panelW;
         editH = panelH;
+    }
+
+    private void center() {
+        editX = (panelW - editW) / 2.0;
+        editY = (panelH - editH) / 2.0;
+    }
+
+    private void zoomAt(double factor, double screenX, double screenY) {
+        if (editW <= 0 || editH <= 0) return;
+        double minW = panelW * 0.15, maxW = panelW * 40.0;
+        double nw = editW * factor;
+        if (nw < minW) factor = minW / editW;
+        if (nw > maxW) factor = maxW / editW;
+        double ax = (screenX - frameX) / frameScale;          // anchor in panel space
+        double ay = (screenY - frameY) / frameScale;
+        double fx = (ax - editX) / editW;                     // fraction of image under cursor
+        double fy = (ay - editY) / editH;
+        editW *= factor;
+        editH *= factor;
+        editX = ax - fx * editW;
+        editY = ay - fy * editH;
+    }
+
+    private void pan(double dxScreen, double dyScreen) {
+        editX += dxScreen / frameScale;
+        editY += dyScreen / frameScale;
     }
 
     private void rotateImage() {
@@ -152,42 +220,22 @@ public class CapeImageEditorScreen extends Screen {
             targetScale = recommendedScale();
             panelW = PANEL_W * targetScale;
             panelH = PANEL_H * targetScale;
-            fitSource();
-            syncBoxes();
-            refreshStatus();
+            fit();
+            layout();
+            error = null;
         } catch (Exception e) {
-            status = "could not rotate image";
-        }
-    }
-
-    private void syncBoxes() {
-        xBox.setValue(String.valueOf(editX));
-        yBox.setValue(String.valueOf(editY));
-        wBox.setValue(String.valueOf(editW));
-        hBox.setValue(String.valueOf(editH));
-    }
-
-    private void readBoxes() {
-        editX = parseBox(xBox, editX, -262144, 262144);
-        editY = parseBox(yBox, editY, -262144, 262144);
-        editW = parseBox(wBox, editW, 1, 262144);
-        editH = parseBox(hBox, editH, 1, 262144);
-    }
-
-    private int parseBox(EditBox box, int fallback, int min, int max) {
-        try {
-            int v = Integer.parseInt(box.getValue().trim());
-            return Math.max(min, Math.min(max, v));
-        } catch (NumberFormatException e) {
-            return fallback;
+            error = "could not rotate image";
         }
     }
 
     private void saveCape() {
-        readBoxes();
-        String id = CapeSpoofer.INSTANCE.importCapeEdited(sourcePath, editX, editY, editW, editH, targetScale, rotation);
+        String id = CapeSpoofer.INSTANCE.importCapeEdited(
+            sourcePath,
+            (int) Math.round(snapV(editX)), (int) Math.round(snapV(editY)),
+            Math.max(1, (int) Math.round(snapSize(editW))), Math.max(1, (int) Math.round(snapSize(editH))),
+            targetScale, rotation);
         if (id == null) {
-            status = "could not save cape";
+            error = "could not save cape";
             return;
         }
         CONFIG.setCapeId(id);
@@ -196,87 +244,119 @@ public class CapeImageEditorScreen extends Screen {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        readBoxes();
-        g.fillGradient(0, 0, width, height, BG_TOP, BG_BOT);
+    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
+        // our background only; skip vanilla blur + in-world menu tint (the grey wash on yuri mode)
+        if (CONFIG.getBgImage()) g.blit(RenderPipelines.GUI_TEXTURED, BG_TEX, 0, 0, 0f, 0f, width, height, width, height, width, height);
+        else g.fillGradient(0, 0, width, height, BG_TOP, BG_BOT);
+    }
 
-        g.text(font, "cape image editor", 14, 14, TEXT_LT, true);
-        String dims = rawW > 0 ? rawW + " x " + rawH + " source, rot " + rotation * 90 : "";
-        g.text(font, dims, width - 14 - font.width(dims), 15, TEXT_MUTE, true);
-        g.text(font, status, 14, 30, TEXT_MUTE, false);
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
+        this.mx = mouseX; this.my = mouseY;
+
+        g.text(font, "edit cape", 16, 14, TEXT, false);
+        String hint = "scroll · zoom    drag · move";
+        g.text(font, hint, width - 16 - font.width(hint), 15, TEXT_FAINT, false);
 
         renderCanvas(g);
         super.extractRenderState(g, mouseX, mouseY, partial);
-        labelFields(g);
+        renderButtons(g);
     }
 
     private void renderCanvas(GuiGraphicsExtractor g) {
-        double s = canvasScale();
-        int x = canvasX();
-        int y = canvasY();
-        int w = canvasWidth();
-        int h = canvasHeight();
-        inset(g, x - 2, y - 2, w + 4, h + 4, DARK);
+        g.fill(viewX, viewY, viewX + viewW, viewY + viewH, VIEW_BG);
+        border(g, viewX, viewY, viewW, viewH, LINE);
+
+        if (error != null) {
+            g.text(font, error, viewX + (viewW - font.width(error)) / 2, viewY + viewH / 2 - 4, TEXT_MUTE, false);
+            return;
+        }
 
         if (sourceTexture != null && editW > 0 && editH > 0) {
-            g.enableScissor(x, y, x + w, y + h);
-            g.blit(
-                RenderPipelines.GUI_TEXTURED,
-                sourceTexture,
-                x + (int) Math.round(editX * s),
-                y + (int) Math.round(editY * s),
-                0f,
-                0f,
-                Math.max(1, (int) Math.round(editW * s)),
-                Math.max(1, (int) Math.round(editH * s)),
-                sourceW,
-                sourceH,
-                sourceW,
-                sourceH
-            );
+            // draw the grid-snapped rect (continuous edit values are snapped only here + on save)
+            int ix = frameX + (int) Math.round(snapV(editX) * frameScale);
+            int iy = frameY + (int) Math.round(snapV(editY) * frameScale);
+            int iw = Math.max(1, (int) Math.round(snapSize(editW) * frameScale));
+            int ih = Math.max(1, (int) Math.round(snapSize(editH) * frameScale));
+            g.enableScissor(viewX, viewY, viewX + viewW, viewY + viewH);
+            g.blit(RenderPipelines.GUI_TEXTURED, sourceTexture, ix, iy, 0f, 0f, iw, ih, sourceW, sourceH, sourceW, sourceH);
             g.disableScissor();
         }
 
-        int gridStep = Math.max(1, targetScale);
-        for (int gx = 0; gx <= panelW; gx += gridStep) {
-            int px = x + (int) Math.round(gx * s);
-            g.fill(px, y, px + 1, y + h, GRID);
+        // dim everything outside the crop frame so the kept region reads clearly
+        int fr = frameX + frameW, fb = frameY + frameH;
+        g.fill(viewX, viewY, viewX + viewW, frameY, DIMMED);            // top
+        g.fill(viewX, fb, viewX + viewW, viewY + viewH, DIMMED);        // bottom
+        g.fill(viewX, frameY, frameX, fb, DIMMED);                     // left
+        g.fill(fr, frameY, viewX + viewW, fb, DIMMED);                 // right
+
+        grid(g);
+        outline(g, frameX, frameY, frameW, frameH, FRAME);
+        cornerBrackets(g, frameX, frameY, frameW, frameH);
+    }
+
+    // faint grid over the crop frame: one cell per cape-texture pixel (PANEL_W x PANEL_H)
+    private void grid(GuiGraphicsExtractor g) {
+        for (int i = 1; i < PANEL_W; i++) {
+            int gx = frameX + (int) Math.round(i * frameW / (double) PANEL_W);
+            g.fill(gx, frameY, gx + 1, frameY + frameH, GRID);
         }
-        for (int gy = 0; gy <= panelH; gy += gridStep) {
-            int py = y + (int) Math.round(gy * s);
-            g.fill(x, py, x + w, py + 1, GRID);
+        for (int j = 1; j < PANEL_H; j++) {
+            int gy = frameY + (int) Math.round(j * frameH / (double) PANEL_H);
+            g.fill(frameX, gy, frameX + frameW, gy + 1, GRID);
         }
-        outline(g, x, y, w, h, PANEL_HI);
     }
 
-    private void labelFields(GuiGraphicsExtractor g) {
-        if (xBox == null) return;
-        g.text(font, "x", xBox.getX() - 10, xBox.getY() + 5, TEXT_MUTE, false);
-        g.text(font, "y", yBox.getX() - 10, yBox.getY() + 5, TEXT_MUTE, false);
-        g.text(font, "w", wBox.getX() - 12, wBox.getY() + 5, TEXT_MUTE, false);
-        g.text(font, "h", hBox.getX() - 10, hBox.getY() + 5, TEXT_MUTE, false);
+    private void renderButtons(GuiGraphicsExtractor g) {
+        for (int i = 0; i < btnRects.size(); i++) {
+            int[] r = btnRects.get(i);
+            boolean hov = in(mx, my, r);
+            boolean primary = i == saveBtnIndex;
+            int fill = primary ? (hov ? BTN_SAVE_HI : BTN_SAVE) : (hov ? SURFACE_HI : SURFACE);
+            g.fill(r[0], r[1], r[0] + r[2], r[1] + r[3], fill);
+            border(g, r[0], r[1], r[2], r[3], LINE);
+            String lbl = btnLabels.get(i);
+            g.text(font, lbl, r[0] + (r[2] - font.width(lbl)) / 2, r[1] + (r[3] - 8) / 2, TEXT, false);
+        }
     }
 
-    private double canvasScale() {
-        double maxW = (width - 80.0) / Math.max(1, panelW);
-        double maxH = (height - 150.0) / Math.max(1, panelH);
-        return Math.max(0.05, Math.min(16.0, Math.min(maxW, maxH)));
+    // short L-shaped marks at each frame corner to read as a crop frame
+    private void cornerBrackets(GuiGraphicsExtractor g, int x, int y, int w, int h) {
+        int len = Math.max(4, Math.min(w, h) / 8), t = 2;
+        int x1 = x + w, y1 = y + h;
+        g.fill(x, y, x + len, y + t, FRAME);            g.fill(x, y, x + t, y + len, FRAME);
+        g.fill(x1 - len, y, x1, y + t, FRAME);          g.fill(x1 - t, y, x1, y + len, FRAME);
+        g.fill(x, y1 - t, x + len, y1, FRAME);          g.fill(x, y1 - len, x + t, y1, FRAME);
+        g.fill(x1 - len, y1 - t, x1, y1, FRAME);        g.fill(x1 - t, y1 - len, x1, y1, FRAME);
     }
 
-    private int canvasWidth() {
-        return Math.max(1, (int) Math.round(panelW * canvasScale()));
+    @Override
+    public boolean mouseClicked(MouseButtonEvent e, boolean dbl) {
+        if (e.button() == 0) {
+            for (int i = 0; i < btnRects.size(); i++) {
+                if (in(e.x(), e.y(), btnRects.get(i))) { btnActs.get(i).run(); return true; }
+            }
+        }
+        return super.mouseClicked(e, dbl);
     }
 
-    private int canvasHeight() {
-        return Math.max(1, (int) Math.round(panelH * canvasScale()));
+    @Override
+    public boolean mouseDragged(MouseButtonEvent e, double dx, double dy) {
+        if (e.button() == 0 && error == null
+            && in(e.x(), e.y(), new int[]{ viewX, viewY, viewW, viewH })) {
+            pan(dx, dy);
+            return true;
+        }
+        return super.mouseDragged(e, dx, dy);
     }
 
-    private int canvasX() {
-        return (width - canvasWidth()) / 2;
-    }
-
-    private int canvasY() {
-        return 52;
+    @Override
+    public boolean mouseScrolled(double x, double y, double sx, double sy) {
+        if (error == null && sourceW > 0 && in(x, y, new int[]{ viewX, viewY, viewW, viewH })) {
+            zoomAt(sy > 0 ? 1.1 : 1.0 / 1.1, x, y);
+            return true;
+        }
+        return super.mouseScrolled(x, y, sx, sy);
     }
 
     @Override
@@ -315,18 +395,18 @@ public class CapeImageEditorScreen extends Screen {
         };
     }
 
-    private static void inset(GuiGraphicsExtractor g, int x, int y, int w, int h, int face) {
-        g.fill(x, y, x + w, y + h, face);
-        g.fill(x, y, x + w, y + 1, PANEL_SH);
-        g.fill(x, y, x + 1, y + h, PANEL_SH);
-        g.fill(x + w - 1, y, x + w, y + h, PANEL_HI);
-        g.fill(x, y + h - 1, x + w, y + h, PANEL_HI);
+    private static boolean in(double x, double y, int[] r) {
+        return x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3];
     }
 
-    private static void outline(GuiGraphicsExtractor g, int x, int y, int w, int h, int c) {
+    private static void border(GuiGraphicsExtractor g, int x, int y, int w, int h, int c) {
         g.fill(x, y, x + w, y + 1, c);
         g.fill(x, y + h - 1, x + w, y + h, c);
         g.fill(x, y, x + 1, y + h, c);
         g.fill(x + w - 1, y, x + w, y + h, c);
+    }
+
+    private static void outline(GuiGraphicsExtractor g, int x, int y, int w, int h, int c) {
+        border(g, x, y, w, h, c);
     }
 }

@@ -14,7 +14,7 @@ class TransEditBox extends EditBox {
 
     @Override
     public void extractWidgetRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partial) {
-        g.fill(getX() - 2, getY() - 1, getX() + getWidth() + 2, getY() + getHeight() + 1, 0x66000000);
+        g.fill(getX() - 2, getY() - 1, getX() + getWidth() + 2, getY() + getHeight() + 1, 0x73281E26);
         super.extractWidgetRenderState(g, mouseX, mouseY, partial);
     }
 }
